@@ -1,0 +1,23 @@
+{
+  "name": "@infra/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.0.0",
+    "@fastify/helmet": "^13.0.0",
+    "@fastify/rate-limit": "^10.0.0",
+    "@fastify/swagger": "^9.0.0",
+    "@fastify/swagger-ui": "6.1.2",
+    "@infra/contracts": "file:../../packages/contracts",
+    "@infra/database": "file:../../packages/database",
+    "fastify": "5.12.7",
+    "zod": "^4.0.0",
+    "@infra/config": "file:../../packages/config"
+  }
+}

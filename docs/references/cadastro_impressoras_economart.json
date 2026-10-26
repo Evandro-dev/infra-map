@@ -1,0 +1,185 @@
+{
+  "empresa_unidade": "Economart - Pouso Alegre",
+  "servidor_impressao": "SRV-SKY-PRT-01",
+  "data_do_cadastro": "2026-10-23",
+  "observacao": "Dados de rede foram confirmados a partir das filas do servidor e de testes de impressão descritos no atendimento. Campos não observados foram deixados como null ou marcados como pendentes; não preencher por suposição.",
+  "impressoras": [
+    {
+      "id_interno_sugerido": "RH-EPSON-M5899",
+      "nome_amigavel_sugerido": "RH-EPSON-M5899-SKY",
+      "setor_ou_local": "RH - posição exata dentro do setor a confirmar",
+      "fabricante": "Epson",
+      "modelo": "WorkForce Pro WF-M5899",
+      "modelo_regulatorio": null,
+      "tipo_impressao": "monocromática (preto e branco)",
+      "funcoes": ["impressão", "cópia", "digitalização", "fax"],
+      "ip": "192.168.27.202",
+      "mac_address": "A4:D7:3C:77:9B:BA",
+      "servidor_impressao": "SRV-SKY-PRT-01",
+      "nome_compartilhamento": "ECO-POA-RHU-P01",
+      "caminho_compartilhado": "\\\\SRV-SKY-PRT-01\\ECO-POA-RHU-P01",
+      "nome_da_fila_no_servidor_observado": "RH-EPSON-M5899-SKY",
+      "driver_no_servidor": "EPSON WF-M5899 Series",
+      "porta_no_servidor": "192.168.27.202",
+      "protocolo_da_porta_no_servidor": null,
+      "fila_local_wsd_observada": {
+        "nome_local_atual": "RH-EPSON-M5899-WSD",
+        "driver": "Microsoft IPP Class Driver",
+        "porta": "WSD-4f7cfee6-a3a1-48a4-bc0f-0565a9e6d8f0",
+        "status_mais_recente_relatado": "Normal",
+        "observacao": "Fila local direta por WSD. O status chegou a mostrar PaperOut apesar de imprimir; depois de reiniciar o serviço Spooler o status apareceu como Normal. A causa exata não foi confirmada."
+      },
+      "configuracao_alternativa_observada_em_outro_pc": {
+        "monitor_de_porta": "EpsonNet Print Port",
+        "nome_da_porta": "EP779BBA:WF-M5899 SERIES",
+        "ip": "192.168.27.202",
+        "protocolo_lpr": true,
+        "porta_lpr": 515,
+        "nome_fila_lpr": "ENPQueue",
+        "mac_address": "A4:D7:3C:77:9B:BA",
+        "observacao": "Esta configuração foi lida em um computador funcional; não significa que seja a configuração exata da fila compartilhada no servidor."
+      },
+      "status_e_validacao": {
+        "status_mais_recente": "Normal",
+        "teste_de_impressao": "Impressão confirmada anteriormente após configuração direta em outro PC; a fila compartilhada também foi identificada no servidor.",
+        "ultimo_status_problematico": "PaperOut reportado pela fila WSD, mesmo enquanto a impressora conseguia imprimir",
+        "causa_confirmada": null
+      },
+      "especificacoes_do_fabricante": {
+        "velocidade_maxima_publicada": "até 34 páginas por minuto em preto (dependente de modo e condições)",
+        "volume_mensal_recomendado_publicado": "até 8.300 páginas",
+        "adf": "alimentador automático de documentos para 50 folhas",
+        "duplex_automatico": true,
+        "capacidade_de_papel_publicada": "até 1.830 folhas com configurações/bandejas opcionais",
+        "fonte": "https://epson.com.br/Para-empresas/Impressoras/Impressoras-a-Jato-de-Tinta/Impressora-Multifuncional-Monocrom%C3%A1tica-WorkForce-Pro-WF-M5899/p/C11CK76301"
+      },
+      "campos_a_confirmar": [
+        "número de série da impressora",
+        "etiqueta patrimonial da impressora principal",
+        "localização física precisa",
+        "bandejas instaladas",
+        "estado atual de tinta/papel",
+        "configuração exata do protocolo da porta no servidor"
+      ]
+    },
+    {
+      "id_interno_sugerido": "POA-EPSON-WFC878R-COLOR",
+      "nome_amigavel_sugerido": "ECO-POA-PLC-P01-COLOR",
+      "setor_ou_local": "Ao lado da sala do usuário (posição exata a confirmar)",
+      "fabricante": "Epson",
+      "modelo": "WorkForce Pro WF-C878R",
+      "modelo_regulatorio": "C524A (conforme etiqueta fotografada; confirmar na etiqueta principal se necessário)",
+      "tipo_impressao": "colorida e preto e branco",
+      "funcoes": ["impressão", "cópia", "digitalização", "fax"],
+      "ip": "192.168.27.201",
+      "mac_address": null,
+      "servidor_impressao": "SRV-SKY-PRT-01",
+      "nome_compartilhamento": "ECO-POA-PLC-P01",
+      "caminho_compartilhado": "\\\\SRV-SKY-PRT-01\\ECO-POA-PLC-P01",
+      "nome_da_fila_no_servidor_observado": "ECO-POA-PLC-P01",
+      "driver_no_servidor": "EPSON WF-C878R Series",
+      "porta_no_servidor": "192.168.27.201",
+      "protocolo_da_porta_no_servidor": null,
+      "status_e_validacao": {
+        "status_mais_recente": "Não consultado diretamente",
+        "teste_de_impressao": "Confirmado em 2026-10-23: foi solicitada uma página de teste pela fila compartilhada e a folha saiu na impressora colorida física ao lado da sala.",
+        "metodo_do_teste": "rundll32 printui.dll,PrintUIEntry /k /n \\\\SRV-SKY-PRT-01\\ECO-POA-PLC-P01",
+        "fila_adicionada_ao_pc": false
+      },
+      "especificacoes_do_fabricante": {
+        "tecnologia": "PrecisionCore Heat-Free, 4 cores CMYK",
+        "velocidade_iso_publicada": "25 ppm em preto / 24 ppm em cores (simplex)",
+        "resolucao_maxima_publicada": "4800 x 1200 dpi",
+        "duplex_automatico": true,
+        "capacidade_de_papel_publicada": "até 1.835 folhas em configuração com bandejas adicionais",
+        "tamanho_maximo_de_impressao_publicado": "até 33 x 48 cm (13 x 19 polegadas)",
+        "fontes": [
+          "https://epson.com.br/Para-empresas/Impressoras/Impressoras-a-Jato-de-Tinta/Impressora-Multifuncional-WorkForce-Pro-WF-C878R/p/C11CH60301"
+        ]
+      },
+      "acessorio_identificado": {
+        "tipo": "unidade de gavetas de papel opcional",
+        "identificadores_fotografados": ["C522AC1", "PXA3CU2"],
+        "observacao": "Esses códigos foram lidos na etiqueta do acessório de gavetas; não devem ser tratados como número de série/modelo da impressora principal."
+      },
+      "campos_a_confirmar": [
+        "número de série da impressora principal",
+        "MAC address",
+        "etiqueta patrimonial",
+        "bandejas instaladas",
+        "estado atual das bolsas de tinta e papel",
+        "status de fila atual",
+        "fila já instalada no computador do usuário"
+      ]
+    }
+  ],
+  "roteiro_de_diagnostico": [
+    {
+      "etapa": 1,
+      "nome": "Identificar equipamento e impacto",
+      "coletar": [
+        "nome da fila usada",
+        "modelo",
+        "IP se conhecido",
+        "computador/PDV afetado",
+        "uma pessoa ou vários usuários",
+        "data e hora",
+        "mensagem exata ou foto do erro sem dados pessoais desnecessários"
+      ]
+    },
+    {
+      "etapa": 2,
+      "nome": "Verificar a impressora física",
+      "coletar": [
+        "mensagem no painel",
+        "bandeja indicada",
+        "papel carregado e tamanho",
+        "alertas de tinta/consumível",
+        "se a impressora está ligada e conectada"
+      ]
+    },
+    {
+      "etapa": 3,
+      "nome": "Verificar a fila do Windows",
+      "coletar": [
+        "nome exato da fila",
+        "driver",
+        "porta",
+        "status",
+        "trabalhos pendentes",
+        "se outro usuário consegue imprimir"
+      ]
+    },
+    {
+      "etapa": 4,
+      "nome": "Executar testes seguros",
+      "acoes": [
+        "confirmar o caminho de rede e o IP registrados",
+        "testar conexão de rede conforme política da empresa",
+        "solicitar página de teste apenas depois de confirmar a impressora de destino",
+        "anotar resultado e horário"
+      ]
+    },
+    {
+      "etapa": 5,
+      "nome": "Escalar",
+      "incluir_no_chamado": [
+        "sintoma",
+        "impacto",
+        "equipamento e fila",
+        "IP/modelo",
+        "foto ou mensagem de erro",
+        "verificações já feitas",
+        "resultado dos testes",
+        "número do chamado relacionado"
+      ]
+    }
+  ],
+  "cuidados": [
+    "Não confundir o IP da impressora com o nome da fila compartilhada.",
+    "Não renomear nem alterar a fila no servidor sem autorização da TI responsável.",
+    "Não remover filas WSD ou compartilhadas sem confirmar dependências.",
+    "Não reiniciar o Spooler se houver trabalhos importantes pendentes sem avaliar o impacto.",
+    "O campo PLC é um código interno no nome da fila; seu significado exato não foi confirmado."
+  ]
+}

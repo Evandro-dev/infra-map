@@ -1,0 +1,192 @@
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  importFileExtension = "ts"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ElementKind {
+  AREA
+  DEVICE
+}
+
+enum ConnectionKind {
+  NETWORK
+  PRINTING
+}
+
+model Branch {
+  id        String   @id @default(cuid())
+  name      String
+  maps      Map[]
+  createdAt DateTime @default(now())
+}
+
+model Map {
+  id            String          @id @default(cuid())
+  branchId      String
+  branch        Branch          @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  name          String
+  widthMeters   Float           @default(120)
+  heightMeters  Float           @default(80)
+  originXMeters Float           @default(0)
+  originYMeters Float           @default(0)
+  elements      MapElement[]
+  connections   MapConnection[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+}
+
+model Device {
+  id                String               @id @default(cuid())
+  name              String
+  kind              String
+  model             String?
+  ipAddress         String?
+  assetTag          String?
+  manufacturer      String?
+  serialNumber      String?
+  macAddress        String?
+  hostname          String?
+  operatingSystem   String?
+  assignedUser      String?
+  notes             String?
+  status            String               @default("UNKNOWN")
+  elements          MapElement[]
+  islComputerId     String?              @unique
+  islComputerName   String?
+  printServer       String?
+  printShare        String?
+  approvedDriver    String?
+  printQueue        String?
+  printPort         String?
+  printProtocol     String?
+  printPortNumber   Int?
+  assignedPrinters  PrinterAssignment[]  @relation("ComputerAssignments")
+  assignedComputers PrinterAssignment[]  @relation("PrinterAssignments")
+  supportJobs       SupportJob[]
+  monitoring        DeviceMonitor?
+  observations      MonitorObservation[]
+  createdAt         DateTime             @default(now())
+}
+
+model MapElement {
+  id           String          @id
+  mapId        String
+  map          Map             @relation(fields: [mapId], references: [id], onDelete: Cascade)
+  parentId     String?
+  parent       MapElement?     @relation("ElementHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children     MapElement[]    @relation("ElementHierarchy")
+  outgoing     MapConnection[] @relation("ConnectionSource")
+  incoming     MapConnection[] @relation("ConnectionTarget")
+  deviceId     String?
+  device       Device?         @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  kind         ElementKind
+  name         String
+  iconKey      String?
+  xMeters      Float
+  yMeters      Float
+  widthMeters  Float
+  heightMeters Float
+  level        Int             @default(0)
+  orderIndex   Int             @default(0)
+  hidden       Boolean         @default(false)
+  locked       Boolean         @default(false)
+
+  @@index([mapId])
+  @@index([parentId])
+  @@index([deviceId])
+}
+
+model PrinterAssignment {
+  id          String          @id @default(cuid())
+  computerId  String
+  printerId   String
+  computer    Device          @relation("ComputerAssignments", fields: [computerId], references: [id], onDelete: Cascade)
+  printer     Device          @relation("PrinterAssignments", fields: [printerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime        @default(now())
+  connections MapConnection[]
+
+  @@unique([computerId, printerId])
+}
+
+model SupportJob {
+  id               String   @id @default(cuid())
+  deviceId         String
+  device           Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  action           String
+  status           String   @default("PENDING")
+  providerActionId String?
+  resultSummary    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([deviceId, createdAt])
+}
+
+/**
+ * Physical/logical connections between placed devices in one workflow.
+ */
+model MapConnection {
+  id                  String             @id @default(cuid())
+  mapId               String
+  map                 Map                @relation(fields: [mapId], references: [id], onDelete: Cascade)
+  sourceElementId     String
+  source              MapElement         @relation("ConnectionSource", fields: [sourceElementId], references: [id], onDelete: Cascade)
+  targetElementId     String
+  target              MapElement         @relation("ConnectionTarget", fields: [targetElementId], references: [id], onDelete: Cascade)
+  createdAt           DateTime           @default(now())
+  kind                ConnectionKind     @default(NETWORK)
+  printerAssignmentId String?
+  printerAssignment   PrinterAssignment? @relation(fields: [printerAssignmentId], references: [id], onDelete: Cascade)
+
+  @@unique([mapId, sourceElementId, targetElementId])
+  @@index([mapId])
+}
+
+model DeviceMonitor {
+  deviceId        String    @id
+  device          Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  enabled         Boolean   @default(false)
+  intervalSeconds Int       @default(60)
+  timeoutSeconds  Int       @default(5)
+  useIsl          Boolean   @default(false)
+  useWindows      Boolean   @default(false)
+  usePrintServer  Boolean   @default(false)
+  useTcp          Boolean   @default(false)
+  tcpPort         Int?
+  lastRunAt       DateTime?
+  nextRunAt       DateTime  @default(now())
+  leaseUntil      DateTime?
+  updatedAt       DateTime  @updatedAt
+
+  @@index([enabled, nextRunAt])
+}
+
+model MonitorObservation {
+  id        String   @id @default(cuid())
+  deviceId  String
+  device    Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  source    String
+  status    String
+  summary   String
+  data      Json
+  checkedAt DateTime @default(now())
+
+  @@index([deviceId, source, checkedAt(sort: Desc)])
+}
+
+// Última coleta por servidor e origem. Catálogo separado dos equipamentos físicos.
+model PrintCatalogSnapshot {
+  id          String   @id @default(cuid())
+  serverKey   String
+  serverName  String
+  source      String
+  collectedAt DateTime
+  payload     Json
+
+  @@unique([serverKey, source])
+}

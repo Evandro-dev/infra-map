@@ -1,0 +1,32 @@
+CREATE TYPE "ElementKind" AS ENUM ('AREA','DEVICE');
+CREATE TABLE "Branch" (
+ "id" TEXT NOT NULL, "name" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ CONSTRAINT "Branch_pkey" PRIMARY KEY ("id")
+);
+CREATE TABLE "Map" (
+ "id" TEXT NOT NULL, "branchId" TEXT NOT NULL, "name" TEXT NOT NULL,
+ "widthMeters" DOUBLE PRECISION NOT NULL DEFAULT 120, "heightMeters" DOUBLE PRECISION NOT NULL DEFAULT 80,
+ "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL,
+ CONSTRAINT "Map_pkey" PRIMARY KEY ("id")
+);
+CREATE TABLE "Device" (
+ "id" TEXT NOT NULL, "name" TEXT NOT NULL, "kind" TEXT NOT NULL,
+ "model" TEXT, "ipAddress" TEXT, "assetTag" TEXT, "status" TEXT NOT NULL DEFAULT 'UNKNOWN',
+ "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ CONSTRAINT "Device_pkey" PRIMARY KEY ("id")
+);
+CREATE TABLE "MapElement" (
+ "id" TEXT NOT NULL, "mapId" TEXT NOT NULL, "parentId" TEXT, "deviceId" TEXT,
+ "kind" "ElementKind" NOT NULL, "name" TEXT NOT NULL, "iconKey" TEXT,
+ "xMeters" DOUBLE PRECISION NOT NULL, "yMeters" DOUBLE PRECISION NOT NULL,
+ "widthMeters" DOUBLE PRECISION NOT NULL, "heightMeters" DOUBLE PRECISION NOT NULL,
+ "level" INTEGER NOT NULL DEFAULT 0,
+ CONSTRAINT "MapElement_pkey" PRIMARY KEY ("id")
+);
+CREATE INDEX "MapElement_mapId_idx" ON "MapElement"("mapId");
+CREATE INDEX "MapElement_parentId_idx" ON "MapElement"("parentId");
+CREATE INDEX "MapElement_deviceId_idx" ON "MapElement"("deviceId");
+ALTER TABLE "Map" ADD CONSTRAINT "Map_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES "Branch"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "MapElement" ADD CONSTRAINT "MapElement_mapId_fkey" FOREIGN KEY ("mapId") REFERENCES "Map"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "MapElement" ADD CONSTRAINT "MapElement_parentId_fkey" FOREIGN KEY ("parentId") REFERENCES "MapElement"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "MapElement" ADD CONSTRAINT "MapElement_deviceId_fkey" FOREIGN KEY ("deviceId") REFERENCES "Device"("id") ON DELETE SET NULL ON UPDATE CASCADE;

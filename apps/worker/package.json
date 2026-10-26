@@ -1,0 +1,13 @@
+{
+  "name": "@infra/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@infra/config": "file:../../packages/config"
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  }
+}

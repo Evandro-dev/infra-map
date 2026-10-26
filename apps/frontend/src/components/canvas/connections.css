@@ -1,0 +1,55 @@
+.connection-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  pointer-events: none;
+  overflow: hidden;
+}
+.connection-stroke {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.connection-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 18;
+  pointer-events: stroke;
+  cursor: pointer;
+  outline: none;
+}
+.connection-hit:focus-visible {
+  stroke: #537ba433;
+}
+.connection-preview {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 7 5;
+  pointer-events: none;
+}
+.connection-toolbar {
+  position: absolute;
+  z-index: 36;
+  transform: translate(-50%, -50%);
+  border: 1px solid #e0e2e6;
+  border-radius: 8px;
+  box-shadow: 0 3px 12px #00000014;
+  background: #fff;
+  pointer-events: auto;
+  padding: 1px;
+}
+.connection-toolbar .context-toolbar-button:hover {
+  color: #c94e48;
+}
+.connection-port {
+  touch-action: none;
+}
+.connection-port.is-target {
+  background: #daf1e4;
+  border-color: #23815b;
+  box-shadow: 0 0 0 4px #bce3cc80;
+}

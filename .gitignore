@@ -1,0 +1,180 @@
+
+# ============================================================
+# INFRA MAP — GITIGNORE
+# ============================================================
+
+# ------------------------------------------------------------
+# 1. DEPENDÊNCIAS
+# ------------------------------------------------------------
+node_modules/
+**/node_modules/
+.pnp.*
+.yarn/cache/
+.yarn/unplugged/
+.npm/
+.pnpm-store/
+
+# ------------------------------------------------------------
+# 2. NEXT.JS / TURBOPACK / REACT
+# ------------------------------------------------------------
+.next/
+.next-e2e/
+out/
+.vercel/
+.turbo/
+next-env.d.ts
+
+# ------------------------------------------------------------
+# 3. BUILD / DISTRIBUIÇÃO
+# ------------------------------------------------------------
+dist/
+build/
+release/
+output/
+*.tsbuildinfo
+*.map
+
+# ------------------------------------------------------------
+# 4. CACHE / ARQUIVOS TEMPORÁRIOS
+# ------------------------------------------------------------
+.cache/
+.parcel-cache/
+.eslintcache
+.stylelintcache
+.tmp/
+temp/
+tmp/
+*.tmp
+*.temp
+*.bak
+*.orig
+*.swp
+*.swo
+*~
+
+# ------------------------------------------------------------
+# 5. VARIÁVEIS DE AMBIENTE / SEGREDOS
+# ------------------------------------------------------------
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Modelos públicos de configuração são permitidos
+!.env.example
+!.env.sample
+!.env.*.example
+!**/.env.example
+!**/.env.sample
+!**/.env.*.example
+
+# Chaves e certificados privados
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_ed25519
+secrets/
+.credentials/
+
+# ------------------------------------------------------------
+# 6. PRISMA / BANCO DE DADOS
+# ------------------------------------------------------------
+packages/database/src/generated/
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.sql.gz
+*.dump
+*.backup
+
+# ------------------------------------------------------------
+# 7. DOCKER / POSTGRESQL LOCAL
+# ------------------------------------------------------------
+docker-data/
+postgres-data/
+pgdata/
+.docker-data/
+
+# ------------------------------------------------------------
+# 8. LOGS
+# ------------------------------------------------------------
+logs/
+*.log
+*.log.*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ------------------------------------------------------------
+# 9. TESTES / COBERTURA
+# ------------------------------------------------------------
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+blob-report/
+vitest-results/
+*.lcov
+junit.xml
+
+# ------------------------------------------------------------
+# 10. EDITORES / IDEs
+# ------------------------------------------------------------
+.vscode/
+.idea/
+*.iml
+*.code-workspace
+.history/
+.fleet/
+
+# ------------------------------------------------------------
+# 11. WINDOWS / MACOS / LINUX
+# ------------------------------------------------------------
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+.AppleDouble
+.LSOverride
+.Spotlight-V100/
+.Trashes/
+.fseventsd/
+*~
+
+# ------------------------------------------------------------
+# 12. POWERSHELL / ARQUIVOS DE EXECUÇÃO TEMPORÁRIOS
+# ------------------------------------------------------------
+*.transcript.txt
+powershell_transcript*
+*.pid
+*.pid.lock
+
+# ------------------------------------------------------------
+# 13. BACKUPS DO INFRA MAP
+# ------------------------------------------------------------
+.backups/
+backups/
+*.backup-*
+*.backup.*
+*.bak.*
+
+# ------------------------------------------------------------
+# 14. ARQUIVOS GERADOS / EXPORTAÇÕES
+# ------------------------------------------------------------
+artifacts/
+exports/
+generated-reports/
+*.zip
+*.7z
+*.rar
+*.tar.gz

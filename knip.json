@@ -1,0 +1,11 @@
+{
+  "$schema": "./node_modules/knip/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/*.{ts,mjs}"]
+    },
+    "packages/database": {
+      "ignoreDependencies": ["@prisma/client"]
+    }
+  }
+}

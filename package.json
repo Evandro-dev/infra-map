@@ -1,0 +1,61 @@
+{
+  "name": "infra-map",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@11",
+  "engines": {
+    "node": ">=24 <27",
+    "npm": ">=11"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "predev": "node scripts/prepare-dev.mjs",
+    "dev": "concurrently -k --names api,web,monitor --prefix-colors cyan,green,yellow \"npm run dev:api\" \"npm run dev:web\" \"npm run dev:worker\"",
+    "dev:api": "npm run dev --workspace=@infra/api",
+    "dev:web": "npm run dev --workspace=@infra/web",
+    "dev:worker": "npm run dev --workspace=@infra/worker",
+    "db:up": "docker compose up -d --wait",
+    "db:migrate": "npm run migrate --workspace=@infra/database",
+    "db:generate": "npm run generate --workspace=@infra/database",
+    "db:seed": "npm run seed --workspace=@infra/database",
+    "demo:cleanup": "tsx scripts/cleanup-demo.ts",
+    "typecheck": "npm run typecheck --workspaces --if-present && tsc -p tsconfig.scripts.json",
+    "verify": "npm run db:generate && npm run typecheck && npm run test && npm run lint && npm run format:check && npm run check:unused && npm run build",
+    "build": "npm run build --workspace=@infra/web",
+    "test": "vitest run",
+    "lint": "eslint apps/backend/src apps/worker/src packages scripts tests playwright.config.ts vitest.config.ts --no-warn-ignored && npm run lint --workspace=@infra/web",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check:unused": "knip",
+    "inventory:import": "tsx scripts/import-printers.ts",
+    "setup": "node scripts/setup-env.mjs",
+    "test:integration": "tsx scripts/verify-integration.ts",
+    "test:e2e": "playwright test",
+    "inventory:reference": "tsx scripts/sync-print-reference.ts",
+    "inventory:discover": "tsx scripts/discover-print-server.ts"
+  },
+  "devDependencies": {
+    "@infra/config": "file:packages/config",
+    "@infra/database": "file:packages/database",
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^24.0.0",
+    "concurrently": "^9.2.1",
+    "eslint": "^10.0.0",
+    "knip": "^6.43.0",
+    "prettier": "^3.9.10",
+    "tsx": "^4.20.0",
+    "typescript": "~6.0.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^5.0.0"
+  },
+  "allowScripts": {
+    "@prisma/engines@7.10.1": true,
+    "esbuild@0.28.2": true,
+    "prisma@7.10.1": true,
+    "unrs-resolver@1.12.2": true
+  }
+}

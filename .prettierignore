@@ -1,0 +1,13 @@
+node_modules/
+**/node_modules/
+**/.next/
+**/.next-e2e/
+**/generated/
+.backups/
+backups/
+package-lock.json
+*.tsbuildinfo
+*.backup-*
+coverage/
+test-results/
+playwright-report/
