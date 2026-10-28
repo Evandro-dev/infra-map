@@ -1,6 +1,11 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { printServerSchema, type PrintDiscoveryResult } from '@infra/contracts';
+import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  printServerSchema,
+  type ManagedCredentialSummary,
+  type PrintDiscoveryResult,
+} from '@infra/contracts';
 import { api } from '@/lib/api';
 import { CatalogField } from './catalog-field';
 import { useInventoryCatalog } from '../use-inventory-catalog';
@@ -16,15 +21,35 @@ export function PrintDiscoveryPanel({
 }) {
   const [serverDraft, setServerDraft] = useState<string | null>(null);
   const { catalog } = useInventoryCatalog('PRINTER', serverDraft ?? initialServer ?? '');
-  const [useCredentials, setUseCredentials] = useState(false);
+  const [credentialMode, setCredentialMode] = useState<'current' | 'temporary' | 'saved'>(
+    'current',
+  );
   const [windowsUsername, setWindowsUsername] = useState('');
   const [windowsPassword, setWindowsPassword] = useState('');
+  const [savedCredentials, setSavedCredentials] = useState<ManagedCredentialSummary[]>([]);
+  const [savedCredentialId, setSavedCredentialId] = useState('');
+  const [credentialLoadError, setCredentialLoadError] = useState('');
   const [available, setAvailable] = useState<boolean | null>(null);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const referenceServer = catalog?.defaultServer ?? '';
   const server = serverDraft ?? (initialServer || referenceServer);
+  const matchingCredentials = useMemo(
+    () =>
+      savedCredentials.filter(
+        (credential) =>
+          !credential.targetServer ||
+          credential.targetServer.toLocaleLowerCase('en-US') ===
+            server.trim().toLocaleLowerCase('en-US'),
+      ),
+    [savedCredentials, server],
+  );
+  const selectedSavedCredentialId = matchingCredentials.some(
+    (credential) => credential.id === savedCredentialId,
+  )
+    ? savedCredentialId
+    : (matchingCredentials[0]?.id ?? '');
   useEffect(() => {
     const controller = new AbortController();
     void api<{ available: boolean }>('/inventory/print-discovery/capabilities', {
@@ -39,6 +64,25 @@ export function PrintDiscoveryPanel({
       });
     return () => controller.abort();
   }, [accessKey]);
+  useEffect(() => {
+    const controller = new AbortController();
+    void api<{ credentials: ManagedCredentialSummary[] }>('/credentials', {
+      headers: { 'x-support-token': accessKey },
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+      .then((result) => {
+        if (!controller.signal.aborted) {
+          setSavedCredentials(result.credentials);
+          setCredentialLoadError('');
+        }
+      })
+      .catch((reason: unknown) => {
+        if (!controller.signal.aborted)
+          setCredentialLoadError(reason instanceof Error ? reason.message : 'Cofre indisponível.');
+      });
+    return () => controller.abort();
+  }, [accessKey]);
   async function collect() {
     const parsed = printServerSchema.safeParse(server);
     if (!parsed.success) {
@@ -46,9 +90,16 @@ export function PrintDiscoveryPanel({
       setError(parsed.error.issues[0].message);
       return;
     }
-    if (useCredentials && (!windowsUsername.trim() || !windowsPassword)) {
+    if (credentialMode === 'temporary' && (!windowsUsername.trim() || !windowsPassword)) {
       setWindowsPassword('');
       setError('Informe usuário e senha Windows para esta consulta.');
+      return;
+    }
+    if (
+      credentialMode === 'saved' &&
+      !matchingCredentials.some((item) => item.id === selectedSavedCredentialId)
+    ) {
+      setError('Selecione uma credencial salva compatível com este servidor.');
       return;
     }
     setWorking(true);
@@ -60,9 +111,11 @@ export function PrintDiscoveryPanel({
         headers: { 'x-support-token': accessKey },
         body: JSON.stringify({
           server: parsed.data,
-          ...(useCredentials
+          ...(credentialMode === 'temporary'
             ? { credentials: { username: windowsUsername.trim(), password: windowsPassword } }
-            : {}),
+            : credentialMode === 'saved'
+              ? { credentialId: selectedSavedCredentialId }
+              : {}),
         }),
       });
       notifyCatalogChanged();
@@ -94,19 +147,47 @@ export function PrintDiscoveryPanel({
         }}
         disabled={working}
       />
-      <label className="support-help">
-        <input
-          type="checkbox"
-          checked={useCredentials}
-          disabled={working}
-          onChange={(event) => {
-            setUseCredentials(event.target.checked);
-            setWindowsPassword('');
-          }}
-        />{' '}
-        Usar outra conta Windows somente nesta consulta
-      </label>
-      {useCredentials && (
+      <fieldset className="print-discovery-auth" disabled={working}>
+        <legend>Conta Windows para a consulta</legend>
+        <label className="support-help">
+          <input
+            type="radio"
+            name="print-discovery-auth"
+            checked={credentialMode === 'current'}
+            onChange={() => {
+              setCredentialMode('current');
+              setWindowsPassword('');
+            }}
+          />{' '}
+          Conta que executa o Infra Map
+        </label>
+        <label className="support-help">
+          <input
+            type="radio"
+            name="print-discovery-auth"
+            checked={credentialMode === 'temporary'}
+            onChange={() => {
+              setCredentialMode('temporary');
+              setWindowsPassword('');
+            }}
+          />{' '}
+          Outra conta somente nesta consulta
+        </label>
+        <label className="support-help">
+          <input
+            type="radio"
+            name="print-discovery-auth"
+            checked={credentialMode === 'saved'}
+            onChange={() => {
+              setCredentialMode('saved');
+              setWindowsPassword('');
+              setSavedCredentialId(matchingCredentials[0]?.id ?? '');
+            }}
+          />{' '}
+          Usar credencial salva no cofre
+        </label>
+      </fieldset>
+      {credentialMode === 'temporary' && (
         <div className="field-stack">
           <label className="form-row">
             <span className="muted">Usuário Windows para consulta</span>
@@ -139,6 +220,33 @@ export function PrintDiscoveryPanel({
             A senha é descartada após a tentativa. Não é salva no cadastro e não substitui a senha
             de acesso do ISL.
           </p>
+        </div>
+      )}
+      {credentialMode === 'saved' && (
+        <div className="field-stack">
+          {matchingCredentials.length ? (
+            <label className="form-row">
+              <span className="muted">Credencial</span>
+              <select
+                className="field"
+                value={selectedSavedCredentialId}
+                disabled={working}
+                onChange={(event) => setSavedCredentialId(event.target.value)}
+              >
+                {matchingCredentials.map((credential) => (
+                  <option key={credential.id} value={credential.id}>
+                    {credential.name}
+                    {credential.targetServer ? ` · ${credential.targetServer}` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <p className="support-help">
+              {credentialLoadError || 'Nenhuma credencial salva está associada a este servidor.'}{' '}
+              <Link href="/credentials">Gerenciar credenciais</Link>
+            </p>
+          )}
         </div>
       )}
       <button

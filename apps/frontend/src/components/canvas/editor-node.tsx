@@ -10,13 +10,16 @@ export function EditorNode({
   el,
   health,
   connecting,
+  spacePanActive,
   selected,
   unit,
   zoom,
   onSelect,
   onHover,
+  onDraggingStateChange,
   onMove,
   onDragging,
+  position,
   onEdit,
   floorLabel,
   onSwitchFloor,
@@ -25,14 +28,17 @@ export function EditorNode({
   el: MapElement;
   health?: DeviceHealth;
   connecting: boolean;
+  spacePanActive: boolean;
   selected: boolean;
   unit: number;
   zoom: number;
-  onSelect: () => void;
+  onSelect: (additive: boolean) => void;
   onHover: (enter: boolean) => void;
+  onDraggingStateChange: (dragging: boolean, id: string) => void;
   onUpdate: (change: Partial<MapElement>) => void;
   onMove: (x: number, y: number) => void;
   onDragging: (x: number, y: number) => { x: number; y: number };
+  position: { x: number; y: number };
   onEdit: () => void;
   floorLabel: string | null;
   onSwitchFloor: () => void;
@@ -49,12 +55,13 @@ export function EditorNode({
   const glyphSize = clamp(Math.min(w, h) * 0.54, 23, 38);
   return (
     <Group
+      id={el.id}
       name="infra-node"
-      x={el.xMeters * unit}
-      y={el.yMeters * unit}
+      x={position.x * unit}
+      y={position.y * unit}
       scaleX={area ? 1 : 1 / zoom}
       scaleY={area ? 1 : 1 / zoom}
-      draggable={!el.locked && !connecting}
+      draggable={!el.locked && !connecting && !spacePanActive}
       onDragMove={(event) => {
         if (event.target !== event.currentTarget) return;
         const target = event.target;
@@ -69,13 +76,12 @@ export function EditorNode({
         setHovered(false);
         onHover(false);
       }}
-      onMouseDown={(event) => {
-        event.cancelBubble = true;
-        onSelect();
-      }}
       onTap={(event) => {
         event.cancelBubble = true;
-        onSelect();
+        onSelect(false);
+      }}
+      onDragStart={(event) => {
+        if (event.target === event.currentTarget) onDraggingStateChange(true, el.id);
       }}
       onDragEnd={(event) => {
         if (event.target !== event.currentTarget) return;
@@ -83,6 +89,7 @@ export function EditorNode({
           Number((event.target.x() / unit).toFixed(3)),
           Number((event.target.y() / unit).toFixed(3)),
         );
+        onDraggingStateChange(false, el.id);
       }}
     >
       {area ? (
@@ -92,8 +99,12 @@ export function EditorNode({
             height={h}
             cornerRadius={10}
             fill="#ffffff"
-            stroke={selected ? '#777980' : hovered ? '#a5a6aa' : '#d5d6d9'}
-            strokeWidth={selected ? 2 : 1.2}
+            name="infra-node-selection-target"
+            stroke={selected ? '#c4c8ce' : hovered ? '#a5a6aa' : '#d5d6d9'}
+            strokeWidth={selected ? 3 / zoom : 1.2 / zoom}
+            shadowColor="#68717d"
+            shadowBlur={selected ? 8 / zoom : 0}
+            shadowOpacity={selected ? 0.14 : 0}
           />
           <Rect
             x={4 / zoom}
@@ -172,11 +183,12 @@ export function EditorNode({
             height={h}
             cornerRadius={9}
             fill="#fff"
-            stroke={selected ? '#74767b' : hovered ? '#a7a9af' : '#d9dade'}
-            strokeWidth={selected ? 2.5 : 1.2}
-            shadowBlur={7}
+            name="infra-node-selection-target"
+            stroke={selected ? '#c4c8ce' : hovered ? '#a7a9af' : '#d9dade'}
+            strokeWidth={selected ? 3 : 1.2}
+            shadowBlur={selected ? 12 : 7}
             shadowColor="#161618"
-            shadowOpacity={0.07}
+            shadowOpacity={selected ? 0.14 : 0.07}
           />
           <VectorIcon
             name={icon}

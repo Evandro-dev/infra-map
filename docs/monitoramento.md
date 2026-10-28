@@ -23,7 +23,7 @@ Remover explicitamente uma conexão de impressão remove a associação esperada
 | Servidor de impressão | Existência da fila, driver e estado informado pelo servidor                   | Impressora com servidor e fila/compartilhamento cadastrados. API no Windows com PrintManagement e conta autorizada. Usa a identidade do processo.                         |
 | TCP                   | Resposta de uma porta explicitamente informada no endereço cadastrado         | Não varre a rede. Porta sem resposta não comprova equipamento offline. Uma resposta não comprova funcionamento dos demais serviços.                                       |
 
-A conta Windows temporária da descoberta manual do catálogo **não é guardada nem reaproveitada pelo worker**. A coleta automática precisa que a API execute sob uma identidade autorizada. O prompt UAC visto durante um atendimento pelo ISL continua sendo tratado na sessão remota. A senha de TI não é necessária para consultar presença pelo ISL.
+A conta Windows temporária da descoberta manual do catálogo **não é guardada nem reaproveitada pelo worker**. As credenciais persistentes do cofre também são usadas somente pela descoberta manual; Monitorar e o worker continuam executando com a identidade do processo da API. A coleta automática precisa que a API execute sob uma identidade autorizada. O prompt UAC visto durante um atendimento pelo ISL continua sendo tratado na sessão remota. A senha de TI não é necessária para consultar presença pelo ISL.
 
 ## Comparação de impressão
 

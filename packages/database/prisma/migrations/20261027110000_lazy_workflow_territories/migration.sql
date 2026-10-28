@@ -1,0 +1,2 @@
+ALTER TABLE "Map"
+ADD COLUMN "hasTerritory" BOOLEAN NOT NULL DEFAULT true;

@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { prisma } from '@infra/database';
+import type { MapElementInput } from '@infra/contracts';
 import { AppError } from '../../shared/errors.js';
 async function requireMap(id: string) {
   if (!(await prisma.map.findUnique({ where: { id }, select: { id: true } })))
@@ -7,6 +8,57 @@ async function requireMap(id: string) {
 }
 export const mapsRepository = {
   list: () => prisma.map.findMany({ orderBy: { createdAt: 'desc' }, include: { branch: true } }),
+  async page({
+    page,
+    pageSize,
+    search,
+    sort,
+    recentOnly,
+  }: {
+    page: number;
+    pageSize: number;
+    search: string;
+    sort: 'updated' | 'created' | 'name';
+    recentOnly: boolean;
+  }) {
+    const where = {
+      ...(search ? { name: { contains: search, mode: 'insensitive' as const } } : {}),
+      ...(recentOnly ? { updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } } : {}),
+    };
+    const orderBy =
+      sort === 'name'
+        ? { name: 'asc' as const }
+        : sort === 'created'
+          ? { createdAt: 'desc' as const }
+          : { updatedAt: 'desc' as const };
+    const [total, items] = await prisma.$transaction([
+      prisma.map.count({ where }),
+      prisma.map.findMany({
+        where,
+        orderBy,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: { branch: true },
+      }),
+    ]);
+    return {
+      items,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
+  },
+  async summary() {
+    const [workflows, devices, computers, printers, connections] = await Promise.all([
+      prisma.map.count(),
+      prisma.device.count({ where: { elements: { some: {} } } }),
+      prisma.device.count({ where: { kind: 'COMPUTER', elements: { some: {} } } }),
+      prisma.device.count({ where: { kind: 'PRINTER', elements: { some: {} } } }),
+      prisma.mapConnection.count(),
+    ]);
+    return { workflows, devices, computers, printers, connections };
+  },
   byId: (id: string) =>
     prisma.map.findUnique({
       where: { id },
@@ -15,19 +67,64 @@ export const mapsRepository = {
         branch: true,
       },
     }),
-  create: async (name: string, widthMeters: number, heightMeters: number) => {
-    let branch = await prisma.branch.findFirst();
-    if (!branch) branch = await prisma.branch.create({ data: { name: 'Filial principal' } });
-    return prisma.map.create({
-      data: {
-        id: randomBytes(12).toString('base64url').slice(0, 16),
-        branchId: branch.id,
-        name,
-        widthMeters,
-        heightMeters,
-      },
-    });
-  },
+  create: async (
+    workflow: {
+      name: string;
+      widthMeters: number;
+      heightMeters: number;
+      originXMeters: number;
+      originYMeters: number;
+      hasTerritory: boolean;
+      elements: MapElementInput[];
+    },
+    sortedElements: MapElementInput[],
+  ) =>
+    prisma.$transaction(async (tx) => {
+      let branch = await tx.branch.findFirst();
+      if (!branch) branch = await tx.branch.create({ data: { name: 'Filial principal' } });
+      const deviceIds = [
+        ...new Set(
+          sortedElements.flatMap((element) => (element.deviceId ? [element.deviceId] : [])),
+        ),
+      ];
+      if (deviceIds.length) {
+        const count = await tx.device.count({ where: { id: { in: deviceIds } } });
+        if (count !== deviceIds.length) throw new AppError(400, 'Equipamento não cadastrado');
+      }
+      const map = await tx.map.create({
+        data: {
+          id: randomBytes(12).toString('base64url').slice(0, 16),
+          branchId: branch.id,
+          name: workflow.name,
+          widthMeters: workflow.widthMeters,
+          heightMeters: workflow.heightMeters,
+          originXMeters: workflow.originXMeters,
+          originYMeters: workflow.originYMeters,
+          hasTerritory: workflow.hasTerritory,
+        },
+      });
+      if (sortedElements.length)
+        await tx.mapElement.createMany({
+          data: sortedElements.map((element) => ({
+            id: element.id,
+            mapId: map.id,
+            parentId: element.parentId,
+            deviceId: element.deviceId,
+            kind: element.kind,
+            name: element.name,
+            iconKey: element.iconKey,
+            xMeters: element.xMeters,
+            yMeters: element.yMeters,
+            widthMeters: element.widthMeters,
+            heightMeters: element.heightMeters,
+            level: element.level,
+            orderIndex: element.orderIndex ?? 0,
+            hidden: element.hidden ?? false,
+            locked: element.locked ?? false,
+          })),
+        });
+      return map;
+    }),
   async relationships(mapId: string) {
     await requireMap(mapId);
     return prisma.printerAssignment.findMany({

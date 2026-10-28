@@ -12,6 +12,7 @@ import { deviceRoutes } from './modules/devices/devices.routes.js';
 import { supportRoutes } from './modules/support/support.routes.js';
 import { inventoryRoutes } from './modules/inventory/inventory.routes.js';
 import { monitoringRoutes } from './modules/monitoring/monitoring.routes.js';
+import { credentialsRoutes } from './modules/credentials/credentials.routes.js';
 
 export async function buildApp(options: FastifyServerOptions = {}) {
   const app = Fastify({
@@ -22,6 +23,9 @@ export async function buildApp(options: FastifyServerOptions = {}) {
         'req.headers.authorization',
         'req.body.credentials',
         'req.body.accessPassword',
+        'req.body.username',
+        'req.body.password',
+        'req.body.secret',
       ],
     },
     bodyLimit: 1_000_000,
@@ -82,6 +86,7 @@ export async function buildApp(options: FastifyServerOptions = {}) {
   await app.register(supportRoutes, { prefix: '/api/v1/support' });
   await app.register(inventoryRoutes, { prefix: '/api/v1/inventory' });
   await app.register(monitoringRoutes, { prefix: '/api/v1/monitoring' });
+  await app.register(credentialsRoutes, { prefix: '/api/v1/credentials' });
   app.addHook('onClose', async () => {
     await prisma.$disconnect();
   });

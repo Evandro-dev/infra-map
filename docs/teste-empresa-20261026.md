@@ -11,7 +11,7 @@ As correções de interface, busca paginada e credenciais temporárias foram pre
 7. A **senha de acesso ISL AlwaysOn**, a **conta Windows/TI** e a **chave de operador do Infra Map** têm funções diferentes. A opção temporária de conta Windows do coletor não substitui nenhuma das outras nem dá elevação automática ao atendimento remoto.
 8. A homologação de Execute continua separada. Comece por consultas de leitura em um PC de teste. Reinício/limpeza de Spooler e reinstalação de drivers exigem o procedimento já documentado, com confirmação de destino e impacto.
 9. Posicione um computador e uma impressora, conecte seus pontos e salve. Confira a associação no Suporte. Essa ligação define a impressora esperada e não instala uma fila.
-10. Em **Monitorar**, escolha uma fonte, salve com agendamento desligado e use **Coletar agora**. Confira fonte, horário, dados parciais e permissões. Para Windows e servidor de impressão, a API precisa executar sob uma conta autorizada; a credencial temporária de descoberta não é reutilizada.
+10. Em **Monitorar**, escolha uma fonte, salve com agendamento desligado e use **Coletar agora**. Confira fonte, horário, dados parciais e permissões. Para Windows e servidor de impressão, a API precisa executar sob uma conta autorizada; credenciais temporárias ou salvas usadas na descoberta não são reutilizadas pelo monitoramento.
 11. Valide as filas também no perfil do funcionário. Depois de validar o piloto, habilite **Monitoramento automático** e confira o processo `monitor` iniciado por `npm run dev`.
 12. Arraste os dispositivos: pontos e menu devem acompanhar antes de soltar o mouse. Confira os ícones em contorno dos nove tipos de dispositivo.
 

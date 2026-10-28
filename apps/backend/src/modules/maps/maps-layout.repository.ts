@@ -32,6 +32,7 @@ export async function persistLayout(
         name: layout.name,
         widthMeters: layout.widthMeters,
         heightMeters: layout.heightMeters,
+        ...(layout.hasTerritory === undefined ? {} : { hasTerritory: layout.hasTerritory }),
         originXMeters: layout.originXMeters ?? 0,
         originYMeters: layout.originYMeters ?? 0,
       },
@@ -68,22 +69,6 @@ export async function persistLayout(
     if (removed.length) {
       await tx.mapElement.deleteMany({ where: { mapId, id: { in: removed } } });
     }
-    // Names edited on device cards are also reflected in their inventory record.
-    for (const el of sorted) {
-      if (el.kind === 'DEVICE' && el.deviceId) {
-        const device = await tx.device.findUnique({
-          where: { id: el.deviceId },
-          select: { name: true },
-        });
-        if (device && device.name !== el.name) {
-          await tx.device.update({ where: { id: el.deviceId }, data: { name: el.name } });
-          await tx.mapElement.updateMany({
-            where: { deviceId: el.deviceId },
-            data: { name: el.name },
-          });
-        }
-      }
-    }
     return { ok: true, count: sorted.length, changed, removed: removed.length };
   });
 }
@@ -97,5 +82,29 @@ export async function deleteMapRecords(mapId: string) {
     // Both map and MapElement share cascade FKs in the existing schema.
     await tx.map.delete({ where: { id: mapId } });
     return { ok: true };
+  });
+}
+
+/** Removes the territory and its positions while preserving the workflow and device inventory. */
+export async function clearMapTerritory(
+  mapId: string,
+  territory: { name: string; widthMeters: number; heightMeters: number },
+) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${mapId}, 0))::text`;
+    const found = await tx.map.findUnique({ where: { id: mapId }, select: { id: true } });
+    if (!found) throw Object.assign(new Error('Workflow não encontrado'), { statusCode: 404 });
+    await tx.mapElement.deleteMany({ where: { mapId } });
+    await tx.map.update({
+      where: { id: mapId },
+      data: {
+        name: territory.name,
+        widthMeters: territory.widthMeters,
+        heightMeters: territory.heightMeters,
+        hasTerritory: false,
+        originXMeters: 0,
+        originYMeters: 0,
+      },
+    });
   });
 }

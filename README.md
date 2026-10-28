@@ -12,7 +12,7 @@ npm run setup
 npm run dev
 ```
 
-`setup` cria somente arquivos de ambiente ausentes e gera segredos locais. Arquivos existentes são preservados. `dev` inicia PostgreSQL, aplica as migrations pendentes, gera o Prisma Client e inicia API, frontend e worker. O worker consulta somente equipamentos com monitoramento habilitado. Não recria mapas de exemplo.
+`setup` cria arquivos de ambiente ausentes e gera segredos locais; valores existentes são preservados e a chave do cofre só é gerada quando está ausente ou vazia. `dev` inicia PostgreSQL, aplica as migrations pendentes, gera o Prisma Client e inicia API, frontend e worker. O worker consulta somente equipamentos com monitoramento habilitado. Não recria mapas de exemplo.
 
 - Interface: http://127.0.0.1:3000
 - API: http://127.0.0.1:4000
@@ -21,29 +21,34 @@ npm run dev
 
 As configurações são carregadas por `packages/config`, na ordem: ambiente do processo, `apps/backend/.env`, `.env` da raiz. O `.env` da raiz contém as variáveis `DB_USER`, `DB_PASSWORD` e `DB_NAME` utilizadas pelo Docker. O backend contém `DATABASE_URL` e as opções do ISL. Não publique esses arquivos.
 
+`npm run setup` também gera `CREDENTIALS_ENCRYPTION_KEY` para o cofre local. As credenciais cadastradas pela interface exigem a chave de suporte e têm usuário/senha cifrados com AES-256-GCM antes de chegar ao PostgreSQL. Faça cópia segura do `apps/backend/.env`: sem a chave original, credenciais salvas não poderão ser abertas. O cofre começa com os tipos de credencial que já têm uso implementado; senhas temporárias continuam disponíveis na consulta Windows.
+
 Se mudar a porta da API, configure também `API_INTERNAL_URL` no ambiente do frontend e reinicie o Next. Exemplo: `http://127.0.0.1:4001`. Esse endereço é usado pelo proxy no servidor e não contém credenciais.
 
 ## Organização
 
-| Pasta                                   | Responsabilidade                                                                    |
-| --------------------------------------- | ----------------------------------------------------------------------------------- |
-| `apps/frontend/src/components`          | Editor visual, canvas, navegação e inspetor                                         |
-| `apps/frontend/src/features/inventory`  | Seleção e posicionamento do inventário existente                                    |
-| `apps/frontend/src/features/support`    | Interface de suporte, cliente autorizado, presença, histórico e comparação de filas |
-| `apps/backend/src/modules/devices`      | Cadastro técnico: rotas, serviço e repositório                                      |
-| `apps/backend/src/modules/maps`         | Mapas, persistência transacional do layout e conexões                               |
-| `apps/backend/src/modules/support`      | Regras de suporte e auditoria; adaptadores separados de WebAPI2 e ISL Light         |
-| `apps/backend/src/modules/inventory`    | Validação, preparação e importação transacional do cadastro de impressoras          |
-| `apps/backend/src/domain`               | Regras espaciais sem acesso a banco ou HTTP                                         |
-| `apps/backend/src/shared`               | Erros HTTP e leitura limitada de respostas                                          |
-| `packages/contracts`                    | Contratos de validação e tipos compartilhados                                       |
-| `packages/database`                     | Prisma, migrations, cliente e conexão PostgreSQL                                    |
-| `packages/config`                       | Carregamento consistente dos arquivos de ambiente                                   |
-| `apps/worker`                           | Agendamento das leituras habilitadas, por meio da API local                         |
-| `apps/backend/src/modules/monitoring`   | Configuração, leituras, regras de saúde, comparação de filas e histórico            |
-| `apps/frontend/src/features/monitoring` | Painel de monitoramento e atualização paginada dos estados no mapa                  |
-| `scripts`                               | Preparação local, importação e verificação de integração                            |
-| `docs/references`                       | Documentação técnica fornecida, com histórico e pendências                          |
+| Pasta                                    | Responsabilidade                                                                    |
+| ---------------------------------------- | ----------------------------------------------------------------------------------- |
+| `apps/frontend/src/components`           | Editor visual, canvas, navegação e inspetor                                         |
+| `apps/frontend/src/features/inventory`   | Seleção e posicionamento do inventário existente                                    |
+| `apps/frontend/src/features/support`     | Interface de suporte, cliente autorizado, presença, histórico e comparação de filas |
+| `apps/backend/src/modules/devices`       | Cadastro técnico: rotas, serviço e repositório                                      |
+| `apps/backend/src/modules/maps`          | Mapas, persistência transacional do layout e conexões                               |
+| `apps/backend/src/modules/support`       | Regras de suporte e auditoria; adaptadores separados de WebAPI2 e ISL Light         |
+| `apps/backend/src/modules/inventory`     | Validação, preparação e importação transacional do cadastro de impressoras          |
+| `apps/backend/src/domain`                | Regras espaciais sem acesso a banco ou HTTP                                         |
+| `apps/backend/src/shared`                | Erros HTTP e leitura limitada de respostas                                          |
+| `packages/contracts`                     | Contratos de validação e tipos compartilhados                                       |
+| `packages/database`                      | Prisma, migrations, cliente e conexão PostgreSQL                                    |
+| `packages/config`                        | Carregamento consistente dos arquivos de ambiente                                   |
+| `apps/worker`                            | Agendamento das leituras habilitadas, por meio da API local                         |
+| `apps/backend/src/modules/monitoring`    | Configuração, leituras, regras de saúde, comparação de filas e histórico            |
+| `apps/frontend/src/features/monitoring`  | Painel de monitoramento e atualização paginada dos estados no mapa                  |
+| `apps/frontend/src/features/workflows`   | Lista de workflows (mapas) e abertura do editor existente                           |
+| `apps/frontend/src/features/credentials` | Formulários específicos e gerenciamento do cofre local de credenciais               |
+| `apps/backend/src/modules/credentials`   | Cofre criptografado, rotas protegidas e resolução de credenciais de impressão       |
+| `scripts`                                | Preparação local, importação e verificação de integração                            |
+| `docs/references`                        | Documentação técnica fornecida, com histórico e pendências                          |
 
 Rotas validam parâmetros e traduzem HTTP. Serviços aplicam regras. Repositórios persistem. O frontend não recebe credenciais da conta ISL. Comandos de manutenção são fixos e gerados exclusivamente no backend.
 
@@ -71,6 +76,10 @@ A aplicação ocorre em uma transação. Repetir a importação preserva cadastr
 O cadastro agora oferece **campos pesquisáveis com entrada manual**, incluindo servidor, fila, driver e portas. A aba Suporte permite coletar o catálogo do servidor Windows escolhido. Consulte [catálogos e descoberta de impressão](docs/catalogos-impressao.md) para o fluxo, as origens e os pré-requisitos. O cadastro documental das duas Epson já alimenta as sugestões; a consulta real depende de acesso ao servidor.
 
 Veja [configuração e homologação do ISL](docs/isl-integracao.md).
+
+As rotas `/workflows` e `/credentials` ficam na navegação do editor. Workflows listam os mapas existentes e abrem o editor preservado em `/workflow/:id`. O tipo de credencial persistente atual é **Windows Print Server**, reutilizado na descoberta de filas. Credenciais Epson não aparecem como formulário ativo porque o material técnico fornecido não especifica um método de autenticação para as duas WF documentadas; os dados de rede e fila continuam no cadastro de inventário.
+
+Veja também [Workflows e Credentials](docs/workflows-credentials.md) para o contrato do cofre e como acrescentar novos provedores.
 
 Conexões **computador ↔ impressora** agora definem a impressora esperada e alimentam a comparação das leituras Windows. A aba **Monitorar** configura presença ISL, saúde Windows, fila do servidor e porta TCP conhecida. Consulte [monitoramento e integração](docs/monitoramento.md). O agendamento começa desligado e preserva o estado manual do inventário.
 

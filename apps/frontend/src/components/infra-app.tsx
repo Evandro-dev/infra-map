@@ -1,6 +1,7 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
-import { DoorOpen } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { Workflow } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useEditorStore } from '@/lib/store';
 import {
@@ -14,27 +15,50 @@ import {
 } from '@/lib/types';
 import { EditorCanvas } from './editor-canvas';
 import { AppHeader } from './layout/app-header';
-import { AppRail } from './layout/app-rail';
 import { LeftSidebar } from './layout/left-sidebar';
 import { RightSidebar } from './layout/right-sidebar';
 import { SidebarResizer } from './layout/sidebar-resizer';
+import { useSidebarLayout } from './layout/use-sidebar-layout';
 import { useMapMonitoring } from '@/features/monitoring/use-map-monitoring';
 import { secureRequest } from '@/features/support/api';
 import { useRouter } from 'next/navigation';
 import type { Route } from 'next';
+import { workflowContextPath, type WorkflowListScope } from '@/features/workflows/workflow-path';
 
-/** URL tipada do Next.js para um workflow persistido. */
-function workflowPath(id: string): Route {
-  return `/workflow/${encodeURIComponent(id)}` as Route;
-}
-
-export function InfraApp({ workflowId }: { workflowId?: string } = {}) {
+export function InfraApp({
+  workflowId,
+  isDraft = false,
+  workflowScope = 'overview',
+}: {
+  workflowId: string;
+  isDraft?: boolean;
+  workflowScope?: WorkflowListScope;
+}) {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [supportAccessKey, setSupportAccessKey] = useState('');
-  const [error, setError] = useState('');
-  const [maps, setMaps] = useState<MapRecord[]>([]);
-  const [map, setMap] = useState<MapRecord | null>(null);
+  const [errorState, setErrorState] = useState<{ workflowId: string; message: string } | null>(
+    null,
+  );
+  const error = errorState?.workflowId === workflowId ? errorState.message : '';
+  const setError = useCallback(
+    (message: string) => {
+      setErrorState(message ? { workflowId, message } : null);
+    },
+    [workflowId],
+  );
+  const [map, setMap] = useState<MapRecord | null>(() =>
+    isDraft
+      ? {
+          id: workflowId,
+          name: 'Novo workflow',
+          widthMeters: 120,
+          heightMeters: 80,
+          hasTerritory: false,
+          elements: [],
+        }
+      : null,
+  );
   const [zoom, setZoom] = useState(1);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -46,26 +70,13 @@ export function InfraApp({ workflowId }: { workflowId?: string } = {}) {
   const [connections, setConnections] = useState<MapConnection[]>([]);
   const connectionDirty = connections.some((link) => link.id.startsWith('local-'));
   const [inspectorOpen, setInspectorOpen] = useState(true);
-  const [sidebarWidth, setSidebarWidth] = useState(224);
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      try {
-        const stored = Number(window.localStorage.getItem('infra-map-sidebar-width'));
-        if (stored >= 180 && stored <= 440) setSidebarWidth(stored);
-      } catch {
-        /* optional */
-      }
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, []);
-  function resizeSidebar(next: number) {
-    setSidebarWidth(Math.max(180, Math.min(440, Math.round(next))));
-  }
-
-  const territoriesRef = useRef<HTMLDivElement>(null);
-  const devicesRef = useRef<HTMLDivElement>(null);
+  const { sidebarWidth, sidebarCollapsed, resizeSidebar, toggleSidebar } = useSidebarLayout();
   const [linkRevision, setLinkRevision] = useState(0);
   const metaRevision = useRef(0);
+  const draftRef = useRef(isDraft);
+  const draftSaveRequested = useRef(false);
+  const loadedWorkflowId = useRef<string | null>(null);
+  const saveRef = useRef<() => Promise<void>>(async () => {});
   const {
     elements,
     selectedId,
@@ -85,32 +96,46 @@ export function InfraApp({ workflowId }: { workflowId?: string } = {}) {
   const parent = selected?.kind === 'AREA' ? selected : null;
   const mapId = map?.id;
   const [monitorRevision, setMonitorRevision] = useState(0);
-  const monitoring = useMapMonitoring(mapId, monitorRevision + linkRevision);
+  const monitoring = useMapMonitoring(isDraft ? undefined : mapId, monitorRevision + linkRevision);
 
   // Carregamento assíncrono: React só recebe as atualizações depois da resposta da API.
   // O cancelamento evita que uma resposta antiga altere um componente desmontado.
   useEffect(() => {
     let cancelled = false;
-    void api<MapRecord[]>('/maps')
-      .then(async (list) => ({
-        list,
-        detail: workflowId
-          ? await api<MapRecord>('/maps/' + encodeURIComponent(workflowId))
-          : list.length
-            ? await api<MapRecord>('/maps/' + list[0].id)
-            : null,
-      }))
-      .then(({ list, detail }) => {
+    draftRef.current = isDraft;
+    draftSaveRequested.current = false;
+    if (isDraft) {
+      loadedWorkflowId.current = workflowId;
+      load([]);
+      metaRevision.current = 0;
+      const loadingFrame = window.requestAnimationFrame(() => setLoading(false));
+      return () => {
+        window.cancelAnimationFrame(loadingFrame);
+        cancelled = true;
+      };
+    }
+    if (loadedWorkflowId.current === workflowId) {
+      return () => {
+        cancelled = true;
+      };
+    }
+    loadedWorkflowId.current = null;
+    void api<MapRecord>('/maps/' + encodeURIComponent(workflowId))
+      .then((detail) => {
         if (cancelled) return;
-        setMaps(list);
+        loadedWorkflowId.current = workflowId;
         setMap(detail);
-        if (!workflowId && detail) router.replace(workflowPath(detail.id));
-        load(detail?.elements ?? []);
+        setConnections([]);
+        setRelationships([]);
+        load(detail.elements ?? []);
         setMapDirty(false);
         metaRevision.current = 0;
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+        if (!cancelled) {
+          setMap(null);
+          setError(err instanceof Error ? err.message : String(err));
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -118,10 +143,10 @@ export function InfraApp({ workflowId }: { workflowId?: string } = {}) {
     return () => {
       cancelled = true;
     };
-  }, [load, workflowId, router]);
+  }, [isDraft, load, setError, workflowId]);
 
   useEffect(() => {
-    if (!mapId) return;
+    if (!mapId || isDraft) return;
     let cancelled = false;
     void api<{ relationships: { computerId: string; printerId: string }[] }>(
       `/maps/${mapId}/relationships`,
@@ -135,9 +160,9 @@ export function InfraApp({ workflowId }: { workflowId?: string } = {}) {
     return () => {
       cancelled = true;
     };
-  }, [mapId, selectedId, linkRevision]);
+  }, [isDraft, linkRevision, mapId, selectedId, setError]);
   useEffect(() => {
-    if (!mapId) return;
+    if (!mapId || isDraft) return;
     let cancelled = false;
     void api<{ connections: MapConnection[] }>(`/maps/${mapId}/connections`)
       .then((data) => {
@@ -156,9 +181,9 @@ export function InfraApp({ workflowId }: { workflowId?: string } = {}) {
     return () => {
       cancelled = true;
     };
-  }, [mapId, linkRevision]);
+  }, [isDraft, linkRevision, mapId, setError]);
   async function connectDevices(sourceElementId: string, targetElementId: string) {
-    if (!map) return;
+    if (!map || map.hasTerritory === false) return;
     if (
       connections.some(
         (link) =>
@@ -285,79 +310,34 @@ export function InfraApp({ workflowId }: { workflowId?: string } = {}) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
   }
-  async function selectMap(id: string) {
-    if (saving || deleting) return;
-    if (
-      (dirty || mapDirty || connectionDirty) &&
-      !window.confirm('Existem alterações não salvas. Descartá-las para trocar de mapa?')
-    )
-      return;
-    try {
-      setError('');
-      const data = await api<MapRecord>('/maps/' + id);
-      setMap(data);
-      router.push(workflowPath(data.id));
-      load(data.elements);
-      setZoom(1);
-      setMapDirty(false);
-      metaRevision.current = 0;
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  }
-  async function createMap() {
-    if (saving || deleting) return;
-    if (
-      (dirty || mapDirty || connectionDirty) &&
-      !window.confirm('Existem alterações não salvas. Descartá-las para criar outro mapa?')
-    )
-      return;
-    try {
-      setError('');
-      const created = await api<MapRecord>('/maps', {
-        method: 'POST',
-        body: JSON.stringify({ name: 'Novo território', widthMeters: 120, heightMeters: 80 }),
-      });
-      setMaps((prev) => [created, ...prev]);
-      setMap(created);
-      setConnections([]);
-      router.push(workflowPath(created.id));
-      load(created.elements ?? []);
-      setZoom(1);
-      setMapDirty(false);
-      metaRevision.current = 0;
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  }
-  async function deleteMap() {
-    if (!map || deleting || saving) return;
+  async function deleteTerritory() {
+    if (!map || map.hasTerritory === false || deleting || saving) return;
     const current = map;
     if (
       !window.confirm(
-        `Excluir o território "${current.name}", seus setores e posições de equipamentos? Os cadastros e históricos do inventário serão preservados. A exclusão do mapa não poderá ser desfeita.`,
+        `Excluir o território de "${current.name}" e limpar setores, posições e conexões deste workflow? Os cadastros e históricos do inventário serão preservados.`,
       )
     )
       return;
     setDeleting(true);
     setError('');
     try {
-      await api<void>('/maps/' + current.id, { method: 'DELETE' });
-      const remaining = maps.filter((item) => item.id !== current.id);
-      setMaps(remaining);
-      if (remaining.length) {
-        const detail = await api<MapRecord>('/maps/' + remaining[0].id);
-        setMap(detail);
-        router.replace(workflowPath(detail.id));
-        load(detail.elements);
-      } else {
-        setMap(null);
-        router.replace('/');
-        load([]);
-      }
+      await api<void>(`/maps/${encodeURIComponent(current.id)}/territory`, {
+        method: 'DELETE',
+        body: JSON.stringify({
+          name: current.name,
+          widthMeters: current.widthMeters,
+          heightMeters: current.heightMeters,
+        }),
+      });
+      setMap({ ...current, hasTerritory: false, originXMeters: 0, originYMeters: 0, elements: [] });
+      load([]);
+      setConnections([]);
+      setRelationships([]);
       setZoom(1);
       setMapDirty(false);
-      metaRevision.current = 0;
+      metaRevision.current++;
+      setLinkRevision((value) => value + 1);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -365,7 +345,7 @@ export function InfraApp({ workflowId }: { workflowId?: string } = {}) {
     }
   }
   function addArea(x = 2, y = 2, parentId: string | null = parent?.id ?? null) {
-    if (!map) return null;
+    if (!map || map.hasTerritory === false) return null;
     const id = crypto.randomUUID();
     const name = 'Novo setor';
     add({
@@ -392,7 +372,7 @@ export function InfraApp({ workflowId }: { workflowId?: string } = {}) {
     y = 2,
     parentId: string | null = parent?.id ?? null,
   ) {
-    if (!map) return;
+    if (!map || map.hasTerritory === false) return;
     try {
       setError('');
       const name = DEVICE_LABELS[kind];
@@ -427,7 +407,7 @@ export function InfraApp({ workflowId }: { workflowId?: string } = {}) {
     return null;
   }
   function placeDevice(device: Device) {
-    if (!map) return;
+    if (!map || map.hasTerritory === false) return;
     const existing = elements.find((element) => element.deviceId === device.id);
     if (existing) {
       useEditorStore.getState().select(existing.id);
@@ -457,6 +437,7 @@ export function InfraApp({ workflowId }: { workflowId?: string } = {}) {
     setMap((current) => (current ? { ...current, ...change } : current));
   }
   function renameMap(name: string) {
+    if (saving || deleting) return;
     const next = name.trim();
     if (map && next && next !== map.name) updateMap({ name: next });
   }
@@ -469,76 +450,107 @@ export function InfraApp({ workflowId }: { workflowId?: string } = {}) {
       ...(element.kind === 'AREA' ? { iconKey: suggestedSectorIcon(next) } : {}),
     });
   }
-  function removeElement(id: string) {
-    const target = elements.find((item) => item.id === id);
-    if (!target) return;
-    const hasChildren = elements.some((item) => item.parentId === id);
-    if (
-      !window.confirm(
-        hasChildren
-          ? `Excluir "${target.name}" e todos os elementos dentro dele?`
-          : `Excluir "${target.name}" do mapa?`,
-      )
-    )
-      return;
-    remove(id);
+  function removeElement(ids: string | string[]) {
+    const requested = Array.isArray(ids) ? ids : [ids];
+    const targets = elements.filter((item) => requested.includes(item.id));
+    if (!targets.length) return;
+    const hasChildren = elements.some((item) =>
+      targets.some((target) => item.parentId === target.id),
+    );
+    const confirmation =
+      targets.length > 1
+        ? `Excluir ${targets.length} elementos selecionados e todos os elementos dentro deles?`
+        : hasChildren
+          ? `Excluir "${targets[0].name}" e todos os elementos dentro dele?`
+          : `Excluir "${targets[0].name}" do mapa?`;
+    if (!window.confirm(confirmation)) return;
+    remove(requested);
   }
-  async function save() {
+  const save = useCallback(async () => {
     if (!map || saving || deleting) return;
+    if (draftRef.current && !dirty && !mapDirty && !connectionDirty) return;
     setSaving(true);
     setError('');
-    const before = JSON.stringify(elements);
+    const elementsAtSave = useEditorStore.getState().elements;
+    const before = JSON.stringify(elementsAtSave);
     const revision = metaRevision.current;
+    const connectionsAtSave = connections;
     try {
-      await api('/maps/' + map.id + '/layout', {
-        method: 'PUT',
-        body: JSON.stringify({
-          name: map.name,
-          widthMeters: map.widthMeters,
-          heightMeters: map.heightMeters,
-          originXMeters: map.originXMeters ?? 0,
-          originYMeters: map.originYMeters ?? 0,
-          elements: elements.map((el) => ({
-            id: el.id,
-            parentId: el.parentId,
-            deviceId: el.deviceId,
-            kind: el.kind,
-            name: el.name,
-            iconKey: el.iconKey,
-            xMeters: el.xMeters,
-            yMeters: el.yMeters,
-            widthMeters: el.widthMeters,
-            heightMeters: el.heightMeters,
-            level: el.level,
-            orderIndex: el.orderIndex ?? 0,
-            hidden: el.hidden ?? false,
-            locked: el.locked ?? false,
-          })),
-        }),
-      });
+      let savedMap = map;
+      let createdWorkflowId: string | null = null;
+      if (draftRef.current) {
+        const created = await api<{ id: string }>('/maps', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: map.name.trim() || 'Novo workflow',
+            widthMeters: map.widthMeters,
+            heightMeters: map.heightMeters,
+            originXMeters: map.originXMeters ?? 0,
+            originYMeters: map.originYMeters ?? 0,
+            hasTerritory: map.hasTerritory !== false,
+            elements: elementsAtSave.map((element) => ({
+              id: element.id,
+              parentId: element.parentId,
+              deviceId: element.deviceId,
+              kind: element.kind,
+              name: element.name,
+              iconKey: element.iconKey,
+              xMeters: element.xMeters,
+              yMeters: element.yMeters,
+              widthMeters: element.widthMeters,
+              heightMeters: element.heightMeters,
+              level: element.level,
+              orderIndex: element.orderIndex ?? 0,
+              hidden: element.hidden ?? false,
+              locked: element.locked ?? false,
+            })),
+          }),
+        });
+        savedMap = { ...map, id: created.id, elements: elementsAtSave };
+        createdWorkflowId = created.id;
+        draftRef.current = false;
+        loadedWorkflowId.current = created.id;
+        setMap(savedMap);
+      } else {
+        await api('/maps/' + map.id + '/layout', {
+          method: 'PUT',
+          body: JSON.stringify({
+            name: map.name,
+            widthMeters: map.widthMeters,
+            heightMeters: map.heightMeters,
+            hasTerritory: map.hasTerritory !== false,
+            originXMeters: map.originXMeters ?? 0,
+            originYMeters: map.originYMeters ?? 0,
+            elements: elementsAtSave.map((el) => ({
+              id: el.id,
+              parentId: el.parentId,
+              deviceId: el.deviceId,
+              kind: el.kind,
+              name: el.name,
+              iconKey: el.iconKey,
+              xMeters: el.xMeters,
+              yMeters: el.yMeters,
+              widthMeters: el.widthMeters,
+              heightMeters: el.heightMeters,
+              level: el.level,
+              orderIndex: el.orderIndex ?? 0,
+              hidden: el.hidden ?? false,
+              locked: el.locked ?? false,
+            })),
+          }),
+        });
+      }
       if (JSON.stringify(useEditorStore.getState().elements) === before) markSaved();
       if (metaRevision.current === revision) setMapDirty(false);
-      setMaps((prev) =>
-        prev.map((item) =>
-          item.id === map.id
-            ? {
-                ...item,
-                name: map.name,
-                widthMeters: map.widthMeters,
-                heightMeters: map.heightMeters,
-              }
-            : item,
-        ),
-      );
-      const placedIds = new Set(elements.map((element) => element.id));
-      const pendingConnections = connections.filter(
+      const placedIds = new Set(elementsAtSave.map((element) => element.id));
+      const pendingConnections = connectionsAtSave.filter(
         (item) =>
           item.id.startsWith('local-') &&
           placedIds.has(item.sourceElementId) &&
           placedIds.has(item.targetElementId),
       );
       for (const link of pendingConnections) {
-        await api<MapConnection>(`/maps/${map.id}/connections`, {
+        await api<MapConnection>(`/maps/${savedMap.id}/connections`, {
           method: 'POST',
           body: JSON.stringify({
             sourceElementId: link.sourceElementId,
@@ -546,65 +558,105 @@ export function InfraApp({ workflowId }: { workflowId?: string } = {}) {
           }),
         });
       }
-      const updated = await api<{ connections: MapConnection[] }>(`/maps/${map.id}/connections`);
+      const updated = await api<{ connections: MapConnection[] }>(
+        `/maps/${savedMap.id}/connections`,
+      );
       setLinkRevision((value) => value + 1);
       const savedIds = new Set(
-        connections.filter((item) => item.id.startsWith('local-')).map((link) => link.id),
+        connectionsAtSave.filter((item) => item.id.startsWith('local-')).map((link) => link.id),
       );
       setConnections((previous) => [
         ...updated.connections,
         ...previous.filter((link) => link.id.startsWith('local-') && !savedIds.has(link.id)),
       ]);
+      const finalizedWorkflowId =
+        createdWorkflowId ?? (!draftRef.current && map.id !== workflowId ? map.id : null);
+      if (
+        finalizedWorkflowId &&
+        window.location.pathname === `/workflow/${encodeURIComponent(workflowId)}` &&
+        new URLSearchParams(window.location.search).get('new') === 'true'
+      )
+        router.replace(workflowContextPath(finalizedWorkflowId, workflowScope));
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setSaving(false);
     }
-  }
+  }, [
+    connectionDirty,
+    connections,
+    deleting,
+    dirty,
+    map,
+    mapDirty,
+    markSaved,
+    router,
+    saving,
+    setError,
+    workflowId,
+    workflowScope,
+  ]);
 
-  if (loading) return <div className="loading">Carregando Infra Map...</div>;
+  useEffect(() => {
+    saveRef.current = save;
+  }, [save]);
+
+  useEffect(() => {
+    if (
+      !isDraft ||
+      !draftRef.current ||
+      map?.id !== workflowId ||
+      loadedWorkflowId.current !== workflowId ||
+      loading ||
+      saving ||
+      deleting ||
+      draftSaveRequested.current ||
+      (!dirty && !mapDirty && !connectionDirty)
+    )
+      return;
+    // The first real edit turns the local draft into a workflow. An untouched draft
+    // stays only in the URL and never creates an empty database row.
+    draftSaveRequested.current = true;
+    void saveRef.current();
+  }, [connectionDirty, deleting, dirty, isDraft, loading, map?.id, mapDirty, saving, workflowId]);
+
+  const visibleDraft = isDraft && map?.id === workflowId;
+  if (loading || (!map && !error) || (map?.id !== workflowId && !error))
+    return <div className="loading">Carregando Infra Map...</div>;
   return (
     <div
-      className={`app ${inspectorOpen ? '' : 'inspector-hidden'}`}
-      style={{ '--infra-sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
+      className={`app workspace-app workspace-editor-app ${
+        inspectorOpen ? '' : 'inspector-hidden'
+      } ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${saving ? 'is-saving' : ''}`}
+      style={
+        {
+          '--infra-sidebar-width': `${sidebarCollapsed ? 49 : sidebarWidth}px`,
+        } as React.CSSProperties
+      }
     >
       <AppHeader
         name={map?.name ?? null}
+        isDraft={visibleDraft}
         hasChanges={dirty || mapDirty || connectionDirty}
         saving={saving}
-        canSave={Boolean(map) && !deleting}
-        canUndo={undoStack.length > 0}
-        canRedo={redoStack.length > 0}
+        canSave={
+          Boolean(map) && !deleting && (!visibleDraft || dirty || mapDirty || connectionDirty)
+        }
+        canUndo={undoStack.length > 0 && !saving}
+        canRedo={redoStack.length > 0 && !saving}
+        onRename={renameMap}
         onUndo={undo}
         onRedo={redo}
         onSave={() => void save()}
       />
-      <AppRail
-        inspectorOpen={inspectorOpen}
-        onToggleInspector={() => setInspectorOpen((value) => !value)}
-        onShowTerritories={() =>
-          territoriesRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-        }
-        onShowDevices={() =>
-          devicesRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-        }
-      />
       <LeftSidebar
-        map={map}
-        maps={maps}
-        saving={saving}
-        deleting={deleting}
-        territoriesRef={territoriesRef}
-        devicesRef={devicesRef}
-        onSelect={(id) => void selectMap(id)}
-        onCreate={() => void createMap()}
-        onArea={() => {
-          addArea();
-        }}
-        onDevice={(kind) => void addDevice(kind)}
-        onPlaceDevice={placeDevice}
+        active={workflowScope}
+        collapsed={sidebarCollapsed}
+        onToggleCollapsed={toggleSidebar}
       />
-      <SidebarResizer sidebarWidth={sidebarWidth} resizeSidebar={resizeSidebar} />
+      {!sidebarCollapsed && (
+        <SidebarResizer sidebarWidth={sidebarWidth} resizeSidebar={resizeSidebar} />
+      )}
       <main className="workspace" aria-label="Área de edição do mapa">
         {error && (
           <div className="error-banner" role="alert">
@@ -624,7 +676,8 @@ export function InfraApp({ workflowId }: { workflowId?: string } = {}) {
             onRenameElement={renameElement}
             onRenameMap={renameMap}
             onDeleteElement={removeElement}
-            onDeleteMap={() => void deleteMap()}
+            onDeleteTerritory={() => void deleteTerritory()}
+            onCreateTerritory={() => updateMap({ hasTerritory: true })}
             onMoveTerritory={(point) =>
               updateMap({ originXMeters: point.x, originYMeters: point.y })
             }
@@ -642,12 +695,23 @@ export function InfraApp({ workflowId }: { workflowId?: string } = {}) {
             }
             showLinks={showLinks}
             toggleLinks={() => setShowLinks((value) => !value)}
+            inspectorOpen={inspectorOpen}
+            actionsDisabled={saving || deleting}
+            hasTerritory={map.hasTerritory !== false}
+            onToggleInspector={() => setInspectorOpen((value) => !value)}
+            onAddArea={() => {
+              addArea();
+            }}
+            onAddDevice={(kind) => void addDevice(kind)}
+            onPlaceDevice={placeDevice}
+            onActionError={setError}
           />
         ) : (
           <div className="empty-state">
-            <DoorOpen size={36} />
-            <h2>Seu espaço está vazio</h2>
-            <p>Crie um território na barra lateral para começar seu mapa do zero.</p>
+            <Workflow size={36} />
+            <h2>Workflow não encontrado</h2>
+            <p>O workflow solicitado não está disponível.</p>
+            <Link href={'/workflows' as Route}>Voltar ao Overview</Link>
           </div>
         )}
       </main>
@@ -658,7 +722,7 @@ export function InfraApp({ workflowId }: { workflowId?: string } = {}) {
         onSupportKeyChange={setSupportAccessKey}
         onUpdateMap={updateMap}
         onRemoveElement={removeElement}
-        onDeleteMap={() => void deleteMap()}
+        onDeleteTerritory={() => void deleteTerritory()}
         onDeviceSaved={(value) => {
           updateDevice(value.id, value);
         }}

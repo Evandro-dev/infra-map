@@ -1,44 +1,87 @@
 'use client';
-import { Layers3, Map as MapIcon, Undo2, Redo2, Save, Check } from 'lucide-react';
+import { useState } from 'react';
+import { Map as MapIcon, Undo2, Redo2, Save, Check, Pencil } from 'lucide-react';
 import { IconTip } from '@/components/ui-tooltip';
 interface Props {
   name: string | null;
+  isDraft: boolean;
   hasChanges: boolean;
   saving: boolean;
   canSave: boolean;
   canUndo: boolean;
   canRedo: boolean;
+  onRename: (name: string) => void;
   onUndo: () => void;
   onRedo: () => void;
   onSave: () => void;
 }
 export function AppHeader({
   name,
+  isDraft,
   hasChanges,
   saving,
   canSave,
   canUndo,
   canRedo,
+  onRename,
   onUndo,
   onRedo,
   onSave,
 }: Props) {
-  const map = name ? { name } : null;
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState(name ?? '');
   const undo = onUndo,
     redo = onRedo;
+
+  function finishNameEdit(commit: boolean) {
+    const next = nameValue.trim();
+    setEditingName(false);
+    if (commit && next && next !== name) onRename(next);
+    else setNameValue(name ?? '');
+  }
+
   return (
     <>
       {' '}
       <header className="app-header">
         <div className="header-identity">
-          <span className="header-brand-icon">
-            <Layers3 size={17} strokeWidth={2.2} />
-          </span>
-          <span className="header-app-name">Infra Map</span>
-          <span className="header-divider">/</span>
-          <span className="header-current" title={map?.name ?? 'Nenhum território'}>
-            {map?.name ?? 'Meus territórios'}
-          </span>
+          {editingName ? (
+            <input
+              className="workflow-title-input"
+              aria-label="Nome do workflow"
+              autoFocus
+              disabled={saving}
+              maxLength={140}
+              value={nameValue}
+              onChange={(event) => setNameValue(event.target.value)}
+              onBlur={() => finishNameEdit(true)}
+              onKeyDown={(event) => {
+                event.stopPropagation();
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  finishNameEdit(true);
+                } else if (event.key === 'Escape') {
+                  event.preventDefault();
+                  finishNameEdit(false);
+                }
+              }}
+            />
+          ) : (
+            <button
+              className="header-current workflow-title-button"
+              type="button"
+              disabled={saving}
+              aria-label={`Renomear workflow ${name ?? ''}`}
+              title="Renomear workflow"
+              onClick={() => {
+                setNameValue(name ?? '');
+                setEditingName(true);
+              }}
+            >
+              <span>{name ?? 'Novo workflow'}</span>
+              <Pencil size={12} aria-hidden="true" />
+            </button>
+          )}
         </div>
         <div className="header-center">
           <span className="view-current">
@@ -50,6 +93,8 @@ export function AppHeader({
             <span className="save-status unsaved">
               <span className="status-dot" /> Alterações não salvas
             </span>
+          ) : isDraft ? (
+            <span className="save-status draft-status">Rascunho não salvo</span>
           ) : (
             <span className="save-status">
               <Check size={13} /> Salvo

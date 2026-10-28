@@ -26,14 +26,21 @@ const deviceOptions: { kind: DeviceKind; icon: ComponentType<{ size?: number }> 
 /** Ferramentas para inserir dispositivos via clique ou drag & drop. */
 export function DevicePalette({
   disabled,
+  searchTerm = '',
   onDevice,
 }: {
   disabled: boolean;
+  searchTerm?: string;
   onDevice: (kind: DeviceKind) => void;
 }) {
+  const normalizedSearch = searchTerm.trim().toLocaleLowerCase('pt-BR');
+  const filteredOptions = deviceOptions.filter(({ kind }) =>
+    DEVICE_LABELS[kind].toLocaleLowerCase('pt-BR').includes(normalizedSearch),
+  );
+
   return (
     <div className="device-palette">
-      {deviceOptions.map(({ kind, icon: Icon }) => (
+      {filteredOptions.map(({ kind, icon: Icon }) => (
         <button
           className="device-tool"
           key={kind}
@@ -49,6 +56,9 @@ export function DevicePalette({
           <span>{DEVICE_LABELS[kind]}</span>
         </button>
       ))}
+      {!filteredOptions.length && (
+        <p className="canvas-node-empty">Nenhum dispositivo encontrado.</p>
+      )}
     </div>
   );
 }

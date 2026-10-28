@@ -1,13 +1,35 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { mapElementSchema } from '@infra/contracts';
 import { deleteMapWithContents, saveLayout, mapsService } from './maps.service.js';
 
 const params = z.object({ id: z.string().min(1).max(100) });
+const territoryClear = z
+  .object({
+    name: z.string().trim().min(1).max(140),
+    widthMeters: z.number().finite().gt(0).max(100000),
+    heightMeters: z.number().finite().gt(0).max(100000),
+  })
+  .strict();
+const listQuery = z.object({
+  page: z.coerce.number().int().min(1).max(10000).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+  search: z.string().trim().max(140).default(''),
+  sort: z.enum(['updated', 'created', 'name']).default('updated'),
+  recentOnly: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
+});
 const newMap = z
   .object({
     name: z.string().trim().min(1).max(140),
     widthMeters: z.number().finite().gt(0).max(100000),
     heightMeters: z.number().finite().gt(0).max(100000),
+    originXMeters: z.number().finite().default(0),
+    originYMeters: z.number().finite().default(0),
+    hasTerritory: z.boolean().default(true),
+    elements: z.array(mapElementSchema).max(3000).default([]),
   })
   .strict();
 const newConnection = z
@@ -18,12 +40,12 @@ const newConnection = z
   .strict();
 
 export async function mapRoutes(app: FastifyInstance) {
+  app.get('/summary', async () => mapsService.summary());
+  app.get('/paged', async (req) => mapsService.page(listQuery.parse(req.query)));
   app.get('/', async () => mapsService.list());
   app.post('/', async (req, reply) => {
     const body = newMap.parse(req.body);
-    return reply
-      .code(201)
-      .send(await mapsService.create(body.name, body.widthMeters, body.heightMeters));
+    return reply.code(201).send(await mapsService.create(body));
   });
   app.get('/:id/relationships', async (req) => ({
     relationships: await mapsService.relationships(params.parse(req.params).id),
@@ -45,6 +67,10 @@ export async function mapRoutes(app: FastifyInstance) {
       .extend({ connectionId: z.string().min(1).max(100) })
       .parse(req.params);
     await mapsService.disconnect(id, connectionId);
+    return reply.code(204).send();
+  });
+  app.delete('/:id/territory', async (req, reply) => {
+    await mapsService.deleteTerritory(params.parse(req.params).id, territoryClear.parse(req.body));
     return reply.code(204).send();
   });
   app.get('/:id', async (req) => mapsService.byId(params.parse(req.params).id));

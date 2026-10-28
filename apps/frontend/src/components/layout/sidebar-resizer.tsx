@@ -1,5 +1,6 @@
 'use client';
 import { useRef } from 'react';
+import { IconTip } from '@/components/ui-tooltip';
 export function SidebarResizer({
   sidebarWidth,
   resizeSidebar,
@@ -40,7 +41,6 @@ export function SidebarResizer({
         aria-valuemin={180}
         aria-valuemax={440}
         tabIndex={0}
-        title="Arraste para redimensionar · dois cliques para restaurar"
         onPointerDown={(event) => {
           event.preventDefault();
           sidebarDrag.current = { initialX: event.clientX, initialWidth: sidebarWidth };
@@ -79,7 +79,15 @@ export function SidebarResizer({
           }
         }}
       >
-        <span className="sidebar-resizer-grip" aria-hidden="true" />
+        <IconTip
+          label="Redimensionar sidebar · duplo clique restaura"
+          shortcut="Arrastar"
+          side="right"
+        >
+          <span className="sidebar-resizer-handle" aria-hidden="true">
+            <span className="sidebar-resizer-grip" />
+          </span>
+        </IconTip>
       </div>
     </>
   );

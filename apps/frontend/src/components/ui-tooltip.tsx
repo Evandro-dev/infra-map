@@ -4,20 +4,22 @@ export function IconTip({
   label,
   shortcut,
   side = 'top',
+  className,
   children,
 }: {
   label: string;
   shortcut?: string;
-  side?: 'top' | 'right';
+  side?: 'top' | 'right' | 'left';
+  className?: string;
   children: ReactNode;
 }) {
   return (
-    <span className={`ui-tooltip ui-tooltip-${side}`}>
+    <div className={`ui-tooltip ui-tooltip-${side} ${className ?? ''}`}>
       {children}
       <span className="ui-tooltip-popover" role="tooltip">
         <span>{label}</span>
         {shortcut && <kbd>{shortcut}</kbd>}
       </span>
-    </span>
+    </div>
   );
 }

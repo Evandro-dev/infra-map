@@ -12,10 +12,33 @@ async function midpoint(line: Locator) {
 }
 async function hoverLine(page: Page, line: Locator) {
   const point = await midpoint(line);
-  await page.mouse.move(point.x-20,point.y-20);
-  await page.mouse.move(point.x, point.y,{steps:3});
-  try {await expect(page.getByRole('toolbar', { name: 'Ações da conexão', exact: true })).toBeVisible();}
-  catch(error){console.log(await page.evaluate(point=>({point,under:document.elementsFromPoint(point.x,point.y).slice(0,5).map(element=>({tag:element.tagName,cls:element.getAttribute('class'),pe:getComputedStyle(element).pointerEvents,d:element.getAttribute('d')})),preview:document.querySelector('.connection-preview')?.getAttribute('d')}),point));throw error;}
+  await page.mouse.move(point.x - 20, point.y - 20);
+  await page.mouse.move(point.x, point.y, { steps: 3 });
+  try {
+    await expect(
+      page.getByRole('toolbar', { name: 'Ações da conexão', exact: true }),
+    ).toBeVisible();
+  } catch (error) {
+    console.log(
+      await page.evaluate(
+        (point) => ({
+          point,
+          under: document
+            .elementsFromPoint(point.x, point.y)
+            .slice(0, 5)
+            .map((element) => ({
+              tag: element.tagName,
+              cls: element.getAttribute('class'),
+              pe: getComputedStyle(element).pointerEvents,
+              d: element.getAttribute('d'),
+            })),
+          preview: document.querySelector('.connection-preview')?.getAttribute('d'),
+        }),
+        point,
+      ),
+    );
+    throw error;
+  }
   return point;
 }
 test('arrasta conexões com prévia, cancela destinos inválidos e exclui somente a linha escolhida', async ({

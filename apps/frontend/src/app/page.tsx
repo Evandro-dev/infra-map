@@ -1,4 +1,4 @@
-import { InfraApp } from '@/components/infra-app';
+import { WorkflowsPage } from '@/features/workflows/components/workflows-page';
 export default function Page() {
-  return <InfraApp />;
+  return <WorkflowsPage />;
 }

@@ -1,6 +1,6 @@
 import '@infra/config';
 import { randomBytes } from 'node:crypto';
-import { existsSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const rootFile = fileURLToPath(new URL('../.env', import.meta.url));
@@ -34,3 +34,22 @@ if (!existsSync(backendFile)) {
   );
   console.log('apps/backend/.env criado; a chave de suporte está somente nesse arquivo.');
 } else console.log('apps/backend/.env existente preservado.');
+const backendEnv = readFileSync(backendFile, 'utf8');
+const encryptionKeyLine = backendEnv.match(/^\s*CREDENTIALS_ENCRYPTION_KEY\s*=(.*)$/m);
+if (!encryptionKeyLine || !encryptionKeyLine[1].trim()) {
+  const generatedKey = randomBytes(32).toString('base64');
+  if (encryptionKeyLine) {
+    const updated = backendEnv.replace(
+      /^(\s*CREDENTIALS_ENCRYPTION_KEY\s*=).*$/m,
+      (_line, prefix) => `${prefix}${generatedKey}`,
+    );
+    writeFileSync(backendFile, updated);
+  } else {
+    appendFileSync(
+      backendFile,
+      `${backendEnv.endsWith('\n') ? '' : '\n'}CREDENTIALS_ENCRYPTION_KEY=${generatedKey}\n`,
+      { flag: 'a' },
+    );
+  }
+  console.log('Chave local do cofre de credenciais adicionada ao backend/.env.');
+} else console.log('Chave do cofre existente preservada.');

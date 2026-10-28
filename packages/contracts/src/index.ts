@@ -21,6 +21,17 @@ export type {
   PrintDiscoveryResult,
 } from './catalog-search.ts';
 export {
+  managedCredentialProviderSchema,
+  createWindowsPrintCredentialSchema,
+  updateManagedCredentialSchema,
+} from './credentials.ts';
+export type {
+  ManagedCredentialProvider,
+  CreateWindowsPrintCredential,
+  UpdateManagedCredential,
+  ManagedCredentialSummary,
+} from './credentials.ts';
+export {
   supportActionSchema,
   supportExecutionSchema,
   islLinkSchema,
@@ -65,6 +76,14 @@ export const newDeviceSchema = z.object({
   ipAddress: z.union([z.ipv4(), z.ipv6(), z.literal('')]).optional(),
   assetTag: z.string().max(100).optional(),
 });
+export const cloneDevicesSchema = z
+  .object({
+    ids: z.array(z.string().trim().min(1).max(80)).min(1).max(3000),
+  })
+  .strict()
+  .refine((value) => new Set(value.ids).size === value.ids.length, {
+    message: 'A lista contém dispositivos repetidos.',
+  });
 export const updateDeviceSchema = z
   .object({
     name: z.string().trim().min(1).max(120).optional(),
@@ -111,6 +130,7 @@ export const layoutSchema = z.object({
   name: z.string().trim().min(1).max(140),
   widthMeters: z.number().finite().gt(0).max(100000),
   heightMeters: z.number().finite().gt(0).max(100000),
+  hasTerritory: z.boolean().optional(),
   originXMeters: z.number().finite().min(-100000).max(100000).optional(),
   originYMeters: z.number().finite().min(-100000).max(100000).optional(),
   elements: z.array(mapElementSchema).max(3000),

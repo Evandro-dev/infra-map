@@ -21,6 +21,7 @@ import {
   CopyPlus,
   Grid3X3,
   XCircle,
+  Plus,
 } from 'lucide-react';
 import { EditorNode } from './canvas/editor-node';
 import { ConnectionPorts } from './canvas/connection-ports';
@@ -34,10 +35,13 @@ import {
   type CanvasConnection,
 } from './canvas/connection-geometry';
 import { CanvasNavigation } from './canvas/canvas-navigation';
+import { CanvasActionBar } from './canvas/canvas-action-bar';
+import { CanvasNodePanel } from './canvas/canvas-node-panel';
 import { ContextToolbar } from './canvas/context-toolbar';
 import { createPreviewBounds, type DragPreview } from './canvas/drag-preview';
 import type { ContextMenuActionId, ContextMenuAction } from './canvas/context-actions';
-import { useEditorStore } from '@/lib/store';
+import { deviceIdsForSelection, selectionRoots, useEditorStore } from '@/lib/store';
+import { cloneInventoryDevices } from '@/features/inventory/clone-devices';
 import {
   absoluteBounds,
   absoluteOrigin,
@@ -48,7 +52,13 @@ import {
   localPositionFor,
   snapToGuides,
 } from '@/lib/spatial';
-import { type MapElement, type MapRecord, type MapConnection } from '@/lib/types';
+import {
+  type Device,
+  type DeviceKind,
+  type MapElement,
+  type MapRecord,
+  type MapConnection,
+} from '@/lib/types';
 import type { DeviceHealth } from '@infra/contracts';
 import { healthColor } from '@/features/monitoring/status';
 
@@ -62,8 +72,9 @@ interface CanvasProps {
   onDropItem: (kind: string, x: number, y: number, parentId: string | null) => string | null;
   onRenameElement: (id: string, name: string) => void;
   onRenameMap: (name: string) => void;
-  onDeleteElement: (id: string) => void;
-  onDeleteMap: () => void;
+  onDeleteElement: (id: string | string[]) => void;
+  onDeleteTerritory: () => void;
+  onCreateTerritory: () => void;
   onMoveTerritory: (point: { x: number; y: number }) => void;
   relationships: { computerId: string; printerId: string }[];
   monitoring: Record<string, DeviceHealth>;
@@ -74,6 +85,14 @@ interface CanvasProps {
   onRemoveRelationship: (computerId: string, printerId: string) => void;
   showLinks: boolean;
   toggleLinks: () => void;
+  inspectorOpen: boolean;
+  actionsDisabled: boolean;
+  hasTerritory: boolean;
+  onToggleInspector: () => void;
+  onAddArea: () => void;
+  onAddDevice: (kind: DeviceKind) => void;
+  onPlaceDevice: (device: Device) => void;
+  onActionError: (message: string) => void;
 }
 export function EditorCanvas({
   map,
@@ -83,7 +102,8 @@ export function EditorCanvas({
   onRenameElement,
   onRenameMap,
   onDeleteElement,
-  onDeleteMap,
+  onDeleteTerritory,
+  onCreateTerritory,
   onMoveTerritory,
   relationships,
   monitoring,
@@ -94,17 +114,58 @@ export function EditorCanvas({
   onRemoveRelationship,
   showLinks,
   toggleLinks,
+  inspectorOpen,
+  actionsDisabled,
+  hasTerritory,
+  onToggleInspector,
+  onAddArea,
+  onAddDevice,
+  onPlaceDevice,
+  onActionError,
 }: CanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const editingRef = useRef<ActiveEdit | null>(null);
+  const selectionStartRef = useRef<{ x: number; y: number } | null>(null);
+  const panGestureRef = useRef<{
+    pointer: { x: number; y: number };
+    origin: { x: number; y: number };
+  } | null>(null);
+  const spacePressedRef = useRef(false);
+  const spaceTapRef = useRef(false);
+  const spacePanUsedRef = useRef(false);
+  const deviceClonePendingRef = useRef(false);
+  const groupDragRef = useRef<{
+    activeId: string;
+    activeWorldX: number;
+    activeWorldY: number;
+    roots: Array<{ id: string; xMeters: number; yMeters: number }>;
+  } | null>(null);
+  const pointerPositionRef = useRef<{ x: number; y: number } | null>(null);
   const didCenter = useRef(false);
   const [editing, setEditing] = useState<ActiveEdit | null>(null);
+  const [nodePanelOpen, setNodePanelOpen] = useState(false);
+  const [nodeSearch, setNodeSearch] = useState('');
+  const [focusNodeSearchRevision, setFocusNodeSearchRevision] = useState(0);
+  const nodeSearchRef = useRef<HTMLInputElement>(null);
   const [viewport, setViewport] = useState({ width: 900, height: 650 });
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [territoryPreview, setTerritoryPreview] = useState<{ x: number; y: number } | null>(null);
   const [dragPreview, setDragPreview] = useState<DragPreview | null>(null);
+  const [groupDragPreview, setGroupDragPreview] = useState<
+    Record<string, { x: number; y: number }>
+  >({});
+  const [selectionRect, setSelectionRect] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const [marqueeSelectionIds, setMarqueeSelectionIds] = useState<string[]>([]);
+  const [territorySelected, setTerritorySelected] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [spacePanActive, setSpacePanActive] = useState(false);
   const territory = territoryPreview ?? { x: map.originXMeters ?? 0, y: map.originYMeters ?? 0 };
   const [overlap, setOverlap] = useState<Overlap | null>(null);
   const [magnetOn, setMagnetOn] = useState(true);
@@ -131,6 +192,17 @@ export function EditorCanvas({
     [],
   );
   useEffect(() => {
+    if (!nodePanelOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest('.canvas-node-panel, .canvas-action-rail')) {
+        setNodePanelOpen(false);
+      }
+    };
+    window.addEventListener('pointerdown', onPointerDown);
+    return () => window.removeEventListener('pointerdown', onPointerDown);
+  }, [nodePanelOpen]);
+  useEffect(() => {
     if (!menuTarget) return;
     const onDown = (event: PointerEvent) => {
       if (!actionRef.current?.contains(event.target as Node)) setMenuTarget(null);
@@ -150,7 +222,8 @@ export function EditorCanvas({
     horizontal: null,
   });
   const [visibleFloor, setVisibleFloor] = useState<Record<string, string>>({});
-  const { elements, selectedId, select, update } = useEditorStore();
+  const { elements, selectedId, selectedIds, select, selectMany, update, updateMany } =
+    useEditorStore();
   const getDisplayedBounds = useMemo(
     () => createPreviewBounds(elements, dragPreview),
     [elements, dragPreview],
@@ -196,6 +269,50 @@ export function EditorCanvas({
       inputRef.current.select();
     }
   }, [editing]);
+  useEffect(() => {
+    if (!nodePanelOpen || focusNodeSearchRevision === 0) return;
+    nodeSearchRef.current?.focus();
+  }, [nodePanelOpen, focusNodeSearchRevision]);
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        event.code === 'Space' &&
+        !target?.closest('input,textarea,select,[contenteditable="true"]')
+      ) {
+        if (!spacePressedRef.current) spacePanUsedRef.current = false;
+        spacePressedRef.current = true;
+        spaceTapRef.current = true;
+        setSpacePanActive(true);
+        event.preventDefault();
+      }
+    };
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.code === 'Space') {
+        spacePressedRef.current = false;
+        setSpacePanActive(false);
+      }
+    };
+    const onBlur = () => {
+      spacePressedRef.current = false;
+      setSpacePanActive(false);
+      spaceTapRef.current = false;
+      spacePanUsedRef.current = false;
+      panGestureRef.current = null;
+      selectionStartRef.current = null;
+      setSelectionRect(null);
+      setMarqueeSelectionIds([]);
+      setIsDragging(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
+    };
+  }, []);
   const pointerToMeters = useCallback(
     (px: number, py: number) => ({
       x: (px - pan.x) / (unit * zoom),
@@ -261,11 +378,30 @@ export function EditorCanvas({
       items.sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
     return byParent;
   }, [elements]);
+  const elementsById = useMemo(
+    () => new Map(elements.map((element) => [element.id, element])),
+    [elements],
+  );
   const beginEdit = useCallback((id: string, value: string) => {
     const edit = { id, value };
     editingRef.current = edit;
     setEditing(edit);
   }, []);
+  useEffect(() => {
+    const onSpaceKeyUp = (event: KeyboardEvent) => {
+      if (event.code !== 'Space' || !spaceTapRef.current) return;
+      spaceTapRef.current = false;
+      if (spacePanUsedRef.current) {
+        spacePanUsedRef.current = false;
+        return;
+      }
+      const state = useEditorStore.getState();
+      const element = state.elements.find((item) => item.id === state.selectedId);
+      if (element) beginEdit(element.id, element.name);
+    };
+    window.addEventListener('keyup', onSpaceKeyUp);
+    return () => window.removeEventListener('keyup', onSpaceKeyUp);
+  }, [beginEdit]);
   function commitEdit(accept: boolean) {
     const current = editingRef.current;
     if (!current) return;
@@ -306,6 +442,21 @@ export function EditorCanvas({
   };
   function moveElement(el: MapElement, x: number, y: number) {
     setDragPreview(null);
+    const group = groupDragRef.current;
+    if (group?.activeId === el.id && group.roots.length > 1) {
+      const origin = absoluteOrigin(elements, el.parentId);
+      const deltaX = origin.x + x - group.activeWorldX;
+      const deltaY = origin.y + y - group.activeWorldY;
+      updateMany(
+        group.roots.map((root) => ({
+          id: root.id,
+          change: { xMeters: root.xMeters + deltaX, yMeters: root.yMeters + deltaY },
+        })),
+      );
+      setGuides({ vertical: null, horizontal: null });
+      setOverlap(null);
+      return;
+    }
     const snap = snapPosition(el, x, y);
     const origin = absoluteOrigin(elements, el.parentId);
     const world = { x: origin.x + snap.x, y: origin.y + snap.y };
@@ -326,6 +477,15 @@ export function EditorCanvas({
     const parentId = parent?.id ?? null;
     const local = localPositionFor(elements, world, parentId);
     update(el.id, { parentId, xMeters: local.x, yMeters: local.y });
+  }
+  function selectNode(id: string, additive: boolean) {
+    setTerritorySelected(false);
+    const state = useEditorStore.getState();
+    if (!additive && state.selectedIds.includes(id)) {
+      state.selectMany(state.selectedIds, id);
+      return;
+    }
+    state.select(id, additive);
   }
   function localToFields(point: { x: number; y: number }) {
     return { xMeters: point.x, yMeters: point.y };
@@ -370,6 +530,7 @@ export function EditorCanvas({
       });
       setVisibleFloor((prev) => ({ ...prev, [footprintKey(target)]: moving.id }));
     }
+    setTerritorySelected(false);
     select(moving.id);
   }
   const renderNodes = (parentId: string | null): React.ReactNode => {
@@ -392,10 +553,47 @@ export function EditorCanvas({
             el={el}
             health={el.deviceId ? monitoring[el.deviceId] : undefined}
             connecting={pendingConnection !== null}
+            spacePanActive={spacePanActive}
             unit={unit}
             zoom={zoom}
-            selected={selectedId === el.id}
-            onSelect={() => select(el.id)}
+            position={groupDragPreview[el.id] ?? { x: el.xMeters, y: el.yMeters }}
+            selected={selectedIds.includes(el.id) || marqueeSelectionIds.includes(el.id)}
+            onSelect={(additive) => selectNode(el.id, additive)}
+            onDraggingStateChange={(dragging, id) => {
+              setIsDragging(dragging);
+              if (!dragging) {
+                groupDragRef.current = null;
+                setGroupDragPreview({});
+                return;
+              }
+              const current = useEditorStore.getState();
+              const requested = current.selectedIds.includes(id) ? current.selectedIds : [id];
+              let roots = selectionRoots(current.elements, requested).filter(
+                (root) => !root.hidden && !root.locked,
+              );
+              if (!roots.some((root) => root.id === id)) {
+                const active = current.elements.find((element) => element.id === id);
+                roots = active && !active.hidden && !active.locked ? [active] : [];
+              }
+              const active = current.elements.find((element) => element.id === id);
+              if (!active || !roots.length) return;
+              const origin = absoluteOrigin(current.elements, active.parentId);
+              groupDragRef.current = {
+                activeId: id,
+                activeWorldX: origin.x + active.xMeters,
+                activeWorldY: origin.y + active.yMeters,
+                roots: roots.map(({ id: rootId, xMeters, yMeters }) => ({
+                  id: rootId,
+                  xMeters,
+                  yMeters,
+                })),
+              };
+              setGroupDragPreview(
+                Object.fromEntries(
+                  roots.map((root) => [root.id, { x: root.xMeters, y: root.yMeters }]),
+                ),
+              );
+            }}
             onHover={(enter) => (enter ? markHover(el.id) : releaseHover())}
             onUpdate={(change) => update(el.id, change)}
             onMove={(x, y) => moveElement(el, x, y)}
@@ -411,6 +609,22 @@ export function EditorCanvas({
                   ? previous
                   : { vertical: snapped.vertical, horizontal: snapped.horizontal },
               );
+              const group = groupDragRef.current;
+              if (group?.activeId === el.id && group.roots.length > 1) {
+                const origin = absoluteOrigin(elements, el.parentId);
+                const offset = {
+                  x: origin.x + snapped.x - group.activeWorldX,
+                  y: origin.y + snapped.y - group.activeWorldY,
+                };
+                setGroupDragPreview(
+                  Object.fromEntries(
+                    group.roots.map((root) => [
+                      root.id,
+                      { x: root.xMeters + offset.x, y: root.yMeters + offset.y },
+                    ]),
+                  ),
+                );
+              }
               return { x: snapped.x, y: snapped.y };
             }}
             onEdit={() => beginEdit(el.id, el.name)}
@@ -418,6 +632,7 @@ export function EditorCanvas({
             onSwitchFloor={() => {
               const next = floors[(floorIndex + 1) % floors.length];
               setVisibleFloor((prev) => ({ ...prev, [footprintKey(el)]: next.id }));
+              setTerritorySelected(false);
               select(next.id);
             }}
           >
@@ -426,66 +641,156 @@ export function EditorCanvas({
         );
       });
   };
+  const copyElements = useCallback((ids: string[]) => {
+    const payload = useEditorStore.getState().copy(ids);
+    if (payload && typeof navigator !== 'undefined')
+      void navigator.clipboard?.writeText(payload).catch(() => undefined);
+  }, []);
+  const duplicateElements = useCallback(
+    async (ids: string[]) => {
+      if (actionsDisabled || deviceClonePendingRef.current) return;
+      const current = useEditorStore.getState();
+      const deviceIds = deviceIdsForSelection(current.elements, ids);
+      deviceClonePendingRef.current = true;
+      try {
+        const deviceCopies = await cloneInventoryDevices(deviceIds);
+        useEditorStore.getState().duplicate(ids, deviceCopies);
+      } catch (error) {
+        onActionError(error instanceof Error ? error.message : String(error));
+      } finally {
+        deviceClonePendingRef.current = false;
+      }
+    },
+    [actionsDisabled, onActionError],
+  );
+  const pasteElements = useCallback(() => {
+    if (actionsDisabled || !hasTerritory || deviceClonePendingRef.current) return;
+    const screen = pointerPositionRef.current ?? {
+      x: viewport.width / 2,
+      y: viewport.height / 2,
+    };
+    const world = pointerToMeters(screen.x, screen.y);
+    const paste = async () => {
+      const current = useEditorStore.getState();
+      if (!current.clipboard.length || deviceClonePendingRef.current) return;
+      const deviceIds = [
+        ...new Set(
+          current.clipboard.flatMap((element) => (element.deviceId ? [element.deviceId] : [])),
+        ),
+      ];
+      deviceClonePendingRef.current = true;
+      try {
+        const deviceCopies = await cloneInventoryDevices(deviceIds);
+        useEditorStore.getState().pasteAt(
+          {
+            x: world.x - territory.x,
+            y: world.y - territory.y,
+          },
+          20 / (unit * zoom),
+          deviceCopies,
+        );
+      } catch (error) {
+        onActionError(error instanceof Error ? error.message : String(error));
+      } finally {
+        deviceClonePendingRef.current = false;
+      }
+    };
+    const readClipboard =
+      typeof navigator === 'undefined' ? undefined : navigator.clipboard?.readText;
+    if (!readClipboard) {
+      void paste();
+      return;
+    }
+    void readClipboard
+      .call(navigator.clipboard)
+      .then((text) => {
+        if (useEditorStore.getState().restoreClipboard(text)) void paste();
+      })
+      .catch(() => void paste());
+  }, [
+    actionsDisabled,
+    hasTerritory,
+    onActionError,
+    pointerToMeters,
+    territory.x,
+    territory.y,
+    unit,
+    viewport.width,
+    viewport.height,
+    zoom,
+  ]);
   // Keyboard accelerators mirror familiar n8n editor gestures for actions this map supports.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
+      if (event.key === 'Escape' && nodePanelOpen) {
+        event.preventDefault();
+        setNodePanelOpen(false);
+        return;
+      }
       if (target?.closest('input,textarea,select,[contenteditable="true"]')) return;
       const key = event.key.toLowerCase();
       const ctrl = event.ctrlKey || event.metaKey;
+      const state = useEditorStore.getState();
       if (ctrl && key === 'z') {
         event.preventDefault();
-        if (event.shiftKey) useEditorStore.getState().redo();
-        else useEditorStore.getState().undo();
+        if (event.shiftKey) state.redo();
+        else state.undo();
       } else if (ctrl && key === 'y') {
         event.preventDefault();
-        useEditorStore.getState().redo();
-      } else if (ctrl && key === 'c' && selectedId) {
+        state.redo();
+      } else if (ctrl && key === 'a') {
         event.preventDefault();
-        const item = useEditorStore
-          .getState()
-          .elements.find((element) => element.id === selectedId);
-        if (item)
-          void navigator.clipboard?.writeText(
-            JSON.stringify({
-              name: item.name,
-              kind: item.kind,
-              deviceId: item.deviceId,
-              xMeters: item.xMeters,
-              yMeters: item.yMeters,
-            }),
-          );
-      } else if (ctrl && key === 'd' && selectedId) {
+        const ids = stageRef.current?.find('.infra-node').map((node) => node.id()) ?? [];
+        setTerritorySelected(false);
+        state.selectMany(ids);
+      } else if (ctrl && key === 'c' && state.selectedIds.length) {
         event.preventDefault();
-        useEditorStore.getState().duplicate(selectedId);
+        copyElements(state.selectedIds);
+      } else if (ctrl && key === 'v') {
+        event.preventDefault();
+        pasteElements();
+      } else if (ctrl && key === 'd' && state.selectedIds.length) {
+        event.preventDefault();
+        void duplicateElements(state.selectedIds);
       } else if (ctrl && key === 's') {
         // Browser save dialog must not appear; the save command lives in InfraApp.
         event.preventDefault();
         document.querySelector<HTMLButtonElement>('[aria-label="Salvar mapa"]')?.click();
-      } else if (!ctrl && !event.altKey && key === 'l' && selectedId) {
+      } else if (!ctrl && !event.altKey && key === 'l' && state.selectedId) {
         event.preventDefault();
-        const element = useEditorStore.getState().elements.find((item) => item.id === selectedId);
+        const element = state.elements.find((item) => item.id === state.selectedId);
         if (element) useEditorStore.getState().update(element.id, { locked: !element.locked });
-      } else if (ctrl && key === ']' && selectedId) {
+      } else if (ctrl && key === ']' && state.selectedId) {
         event.preventDefault();
-        useEditorStore.getState().reorder(selectedId, 1);
-      } else if (ctrl && key === '[' && selectedId) {
+        state.reorder(state.selectedId, 1);
+      } else if (ctrl && key === '[' && state.selectedId) {
         event.preventDefault();
-        useEditorStore.getState().reorder(selectedId, -1);
+        state.reorder(state.selectedId, -1);
       } else if (
         !ctrl &&
         !event.altKey &&
         (event.key === 'Delete' || event.key === 'Backspace') &&
-        selectedId
+        state.selectedIds.length
       ) {
         event.preventDefault();
-        onDeleteElement(selectedId);
-      } else if (!ctrl && !event.altKey && event.code === 'Space' && selectedId) {
-        event.preventDefault();
-        const element = useEditorStore.getState().elements.find((item) => item.id === selectedId);
-        if (element) beginEdit(element.id, element.name);
+        onDeleteElement(state.selectedIds);
       } else if (event.key === 'Escape') {
-        select(null);
+        if (nodePanelOpen) setNodePanelOpen(false);
+        else {
+          setTerritorySelected(false);
+          setMarqueeSelectionIds([]);
+          select(null);
+        }
+      } else if (!ctrl && !event.altKey && !event.shiftKey && key === 'n') {
+        event.preventDefault();
+        setNodePanelOpen((open) => !open);
+      } else if (!ctrl && !event.altKey && event.shiftKey && key === 's' && !actionsDisabled) {
+        event.preventDefault();
+        onAddArea();
+      } else if (!ctrl && !event.altKey && !event.shiftKey && key === 'i') {
+        event.preventDefault();
+        onToggleInspector();
       } else if (!ctrl && !event.altKey && key === '1') {
         event.preventDefault();
         fitToScreen();
@@ -499,7 +804,20 @@ export function EditorCanvas({
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onDeleteElement, selectedId, select, fitToScreen, zoomIn, zoomOut, beginEdit]);
+  }, [
+    onAddArea,
+    actionsDisabled,
+    onDeleteElement,
+    onToggleInspector,
+    select,
+    fitToScreen,
+    zoomIn,
+    zoomOut,
+    nodePanelOpen,
+    copyElements,
+    duplicateElements,
+    pasteElements,
+  ]);
   const devicePorts = elements
     .filter((el) => el.kind === 'DEVICE' && !el.hidden)
     .map((el) => {
@@ -629,7 +947,7 @@ export function EditorCanvas({
   // The contextual toolbar is ordinary HTML rather than Konva artwork.
   // It keeps Lucide SVGs, menu hitboxes and tooltips crisp at EVERY zoom level.
   const candidate = menuTarget ?? (toolbarHovered ? hoverLast : (hoveredTarget ?? selectedId));
-  const targetIsTerritory = candidate === '__territory__';
+  const targetIsTerritory = hasTerritory && candidate === '__territory__';
   const actionElement = targetIsTerritory
     ? null
     : elements.find((el) => el.id === candidate && !el.hidden);
@@ -672,8 +990,9 @@ export function EditorCanvas({
     else if (actionElement) beginEdit(actionElement.id, actionElement.name);
   };
   const deleteTarget = () => {
-    if (targetIsTerritory) onDeleteMap();
-    else if (actionElement) onDeleteElement(actionElement.id);
+    if (targetIsTerritory) onDeleteTerritory();
+    else if (actionElement)
+      onDeleteElement(selectedIds.includes(actionElement.id) ? selectedIds : [actionElement.id]);
   };
   // Menu descriptions must stay data-only: callbacks carrying refs must not be
   // placed in values traversed during React render (react-hooks/refs).
@@ -689,7 +1008,7 @@ export function EditorCanvas({
         },
         {
           id: 'delete',
-          label: 'Excluir território e workflow',
+          label: 'Excluir território',
           shortcut: '',
           icon: Trash2,
           danger: true,
@@ -731,20 +1050,18 @@ export function EditorCanvas({
         break;
       case 'copy':
         if (actionElement)
-          runAction(() => {
-            void navigator.clipboard?.writeText(
-              JSON.stringify({
-                name: actionElement.name,
-                kind: actionElement.kind,
-                deviceId: actionElement.deviceId,
-                xMeters: actionElement.xMeters,
-                yMeters: actionElement.yMeters,
-              }),
-            );
-          });
+          runAction(() =>
+            copyElements(selectedIds.includes(actionElement.id) ? selectedIds : [actionElement.id]),
+          );
         break;
       case 'duplicate':
-        if (actionElement) runAction(() => useEditorStore.getState().duplicate(actionElement.id));
+        if (actionElement)
+          runAction(
+            () =>
+              void duplicateElements(
+                selectedIds.includes(actionElement.id) ? selectedIds : [actionElement.id],
+              ),
+          );
         break;
       case 'align':
         if (actionElement)
@@ -756,7 +1073,11 @@ export function EditorCanvas({
           );
         break;
       case 'clear':
-        runAction(() => select(null));
+        runAction(() => {
+          setTerritorySelected(false);
+          setMarqueeSelectionIds([]);
+          select(null);
+        });
         break;
       case 'disconnect':
         if (actionElement) runAction(() => onDisconnect(actionElement.id));
@@ -799,10 +1120,56 @@ export function EditorCanvas({
       zoom * ((territory.y + editOrigin.y + editElement.yMeters) * unit) +
       (editElement.kind === 'AREA' ? 7 : editElement.heightMeters * 20 + 8)
     : pan.y + territory.y * unit * zoom + 10;
+  const getMarqueeSelectionIds = (bounds: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }) => {
+    const stage = stageRef.current;
+    if (!stage) return [];
+    const left = bounds.x;
+    const top = bounds.y;
+    const right = bounds.x + bounds.width;
+    const bottom = bounds.y + bounds.height;
+    return stage
+      .find('.infra-node-selection-target')
+      .filter((selectionTarget) => {
+        const nodeBounds = selectionTarget.getClientRect({ relativeTo: stage });
+        return (
+          nodeBounds.x < right &&
+          nodeBounds.x + nodeBounds.width > left &&
+          nodeBounds.y < bottom &&
+          nodeBounds.y + nodeBounds.height > top
+        );
+      })
+      .map((selectionTarget) => selectionTarget.getParent()?.id())
+      .filter((id): id is string => Boolean(id));
+  };
+  const marqueeSelectsTerritory = (bounds: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }) => {
+    if (!hasTerritory) return false;
+    const header = {
+      x: pan.x + territory.x * unit * zoom + 8,
+      y: pan.y + territory.y * unit * zoom + 8,
+      width: map.widthMeters * unit * zoom - 16,
+      height: 35,
+    };
+    return (
+      bounds.x < header.x + header.width &&
+      bounds.x + bounds.width > header.x &&
+      bounds.y < header.y + header.height &&
+      bounds.y + bounds.height > header.y
+    );
+  };
   return (
     <div
       ref={containerRef}
-      className="canvas"
+      className={`canvas${isDragging ? ' is-dragging' : ''}`}
       onPointerMove={gesture.onPointerMove}
       onPointerUp={gesture.onPointerUp}
       onPointerCancel={gesture.onPointerCancel}
@@ -816,27 +1183,116 @@ export function EditorCanvas({
         height={viewport.height}
         onWheel={onWheel}
         onMouseDown={(event) => {
-          if (event.target === event.target.getStage()) select(null);
+          if (pendingConnection !== null) return;
+          const stage = event.target.getStage();
+          const pointer = stage?.getPointerPosition();
+          const isNode =
+            event.target.hasName('infra-node') || Boolean(event.target.findAncestor('.infra-node'));
+          const isPanGesture =
+            event.evt.button === 1 || (event.evt.button === 0 && spacePressedRef.current);
+          const isTerritoryHandle =
+            event.target.hasName('territory-drag-handle') ||
+            Boolean(event.target.findAncestor('.territory-drag-handle'));
+          if (isPanGesture && pointer) {
+            event.evt.preventDefault();
+            stage?.stopDrag();
+            event.cancelBubble = true;
+            if (spacePressedRef.current && event.evt.button === 0) spacePanUsedRef.current = true;
+            panGestureRef.current = { pointer, origin: pan };
+            setIsDragging(true);
+            return;
+          }
+          const clickedNode = event.target.hasName('infra-node')
+            ? event.target
+            : event.target.findAncestor('.infra-node');
+          if (clickedNode && event.evt.button === 0 && elementsById.has(clickedNode.id())) {
+            event.cancelBubble = true;
+            selectNode(clickedNode.id(), event.evt.ctrlKey || event.evt.metaKey);
+            return;
+          }
+          if (!isNode && !isTerritoryHandle && event.evt.button === 0) {
+            if (!pointer) return;
+            event.evt.preventDefault();
+            stage?.stopDrag();
+            event.cancelBubble = true;
+            select(null);
+            setTerritorySelected(event.target.hasName('territory-background'));
+            setMarqueeSelectionIds([]);
+            selectionStartRef.current = pointer;
+            setSelectionRect({ x: pointer.x, y: pointer.y, width: 0, height: 0 });
+            return;
+          }
+          if (event.evt.button === 0 && isTerritoryHandle) {
+            select(null);
+            setTerritorySelected(true);
+          } else if (event.evt.button === 0 && !isNode) {
+            select(null);
+            setTerritorySelected(false);
+          }
+        }}
+        onMouseMove={() => {
+          const pointer = stageRef.current?.getPointerPosition();
+          if (!pointer) return;
+          pointerPositionRef.current = pointer;
+          const panGesture = panGestureRef.current;
+          if (panGesture) {
+            setPan({
+              x: panGesture.origin.x + pointer.x - panGesture.pointer.x,
+              y: panGesture.origin.y + pointer.y - panGesture.pointer.y,
+            });
+            return;
+          }
+          const start = selectionStartRef.current;
+          if (start) {
+            const nextRect = {
+              x: Math.min(start.x, pointer.x),
+              y: Math.min(start.y, pointer.y),
+              width: Math.abs(pointer.x - start.x),
+              height: Math.abs(pointer.y - start.y),
+            };
+            setSelectionRect(nextRect);
+            if (nextRect.width > 3 && nextRect.height > 3) {
+              setTerritorySelected(marqueeSelectsTerritory(nextRect));
+              setMarqueeSelectionIds(getMarqueeSelectionIds(nextRect));
+            } else {
+              setMarqueeSelectionIds([]);
+            }
+          }
+        }}
+        onMouseUp={() => {
+          const start = selectionStartRef.current;
+          const stage = stageRef.current;
+          const pointer = stage?.getPointerPosition();
+          if (panGestureRef.current) {
+            panGestureRef.current = null;
+            setIsDragging(false);
+            return;
+          }
+          selectionStartRef.current = null;
+          if (!start || !stage || !pointer) {
+            setSelectionRect(null);
+            setMarqueeSelectionIds([]);
+            return;
+          }
+          const finalRect = {
+            x: Math.min(start.x, pointer.x),
+            y: Math.min(start.y, pointer.y),
+            width: Math.abs(pointer.x - start.x),
+            height: Math.abs(pointer.y - start.y),
+          };
+          if (finalRect.width > 3 && finalRect.height > 3) {
+            const ids = getMarqueeSelectionIds(finalRect);
+            setTerritorySelected(marqueeSelectsTerritory(finalRect));
+            selectMany(ids);
+          }
+          setSelectionRect(null);
+          setMarqueeSelectionIds([]);
         }}
       >
         <Layer>
-          <Group
-            x={pan.x}
-            y={pan.y}
-            scaleX={zoom}
-            scaleY={zoom}
-            draggable={pendingConnection === null}
-            onDragMove={(event) => {
-              if (event.target === event.currentTarget)
-                setPan({ x: event.target.x(), y: event.target.y() });
-            }}
-            onDragEnd={(event) => {
-              if (event.target === event.currentTarget) {
-                setPan({ x: event.target.x(), y: event.target.y() });
-              }
-            }}
-          >
+          <Group x={pan.x} y={pan.y} scaleX={zoom} scaleY={zoom}>
             <Rect
+              name="canvas-background"
               x={grid.left * unit}
               y={grid.top * unit}
               width={(grid.right - grid.left) * unit}
@@ -861,81 +1317,96 @@ export function EditorCanvas({
               }}
             />
 
-            <Group
-              x={territory.x * unit}
-              y={territory.y * unit}
-              draggable={!territoryLocked && pendingConnection === null}
-              onDragMove={(event) => {
-                if (event.target === event.currentTarget)
-                  setTerritoryPreview({ x: event.target.x() / unit, y: event.target.y() / unit });
-              }}
-              onMouseEnter={(event) => {
-                if (!event.target.findAncestor('.infra-node')) markHover('__territory__');
-              }}
-              onMouseLeave={releaseHover}
-              onDragEnd={(event) => {
-                if (event.target === event.currentTarget) {
-                  onMoveTerritory({
-                    x: Number((event.target.x() / unit).toFixed(3)),
-                    y: Number((event.target.y() / unit).toFixed(3)),
-                  });
-                  setTerritoryPreview(null);
-                }
-              }}
-            >
-              <Rect
-                x={0}
-                y={0}
-                width={map.widthMeters * unit}
-                height={map.heightMeters * unit}
-                cornerRadius={10}
-                fill="#fff"
-                stroke="#b8babf"
-                strokeWidth={1.5 / zoom}
-                shadowColor="#25272a"
-                shadowBlur={10 / zoom}
-                shadowOpacity={0.045}
-                shadowOffsetY={3 / zoom}
-                onClick={() => select(null)}
-              />
-              <Rect
-                x={8 / zoom}
-                y={8 / zoom}
-                width={Math.max(5, map.widthMeters * unit - 16 / zoom)}
-                height={35 / zoom}
-                cornerRadius={7 / zoom}
-                fill="#fafafa"
-                listening={false}
-              />
-              <Group x={17 / zoom} y={19 / zoom} scaleX={1 / zoom} scaleY={1 / zoom}>
-                <Text
-                  fontSize={13}
-                  fontStyle="bold"
-                  text={map.name}
-                  fill="#303236"
-                  onClick={(event) => {
-                    event.cancelBubble = true;
+            {hasTerritory && (
+              <Group
+                x={territory.x * unit}
+                y={territory.y * unit}
+                draggable={!territoryLocked && pendingConnection === null}
+                onDragStart={() => {
+                  setIsDragging(true);
+                  setTerritorySelected(true);
+                  select(null);
+                }}
+                onDragMove={(event) => {
+                  if (event.target === event.currentTarget)
+                    setTerritoryPreview({ x: event.target.x() / unit, y: event.target.y() / unit });
+                }}
+                onMouseEnter={(event) => {
+                  if (!event.target.findAncestor('.infra-node')) markHover('__territory__');
+                }}
+                onMouseLeave={releaseHover}
+                onDragEnd={(event) => {
+                  if (event.target === event.currentTarget) {
+                    setIsDragging(false);
+                    onMoveTerritory({
+                      x: Number((event.target.x() / unit).toFixed(3)),
+                      y: Number((event.target.y() / unit).toFixed(3)),
+                    });
+                    setTerritoryPreview(null);
+                  }
+                }}
+              >
+                <Rect
+                  name="territory-background"
+                  x={0}
+                  y={0}
+                  width={map.widthMeters * unit}
+                  height={map.heightMeters * unit}
+                  cornerRadius={10}
+                  fill="#fff"
+                  stroke={territorySelected ? '#c4c8ce' : '#b8babf'}
+                  strokeWidth={territorySelected ? 3 / zoom : 1.5 / zoom}
+                  shadowColor="#25272a"
+                  shadowBlur={territorySelected ? 12 / zoom : 10 / zoom}
+                  shadowOpacity={territorySelected ? 0.14 : 0.045}
+                  shadowOffsetY={3 / zoom}
+                  onClick={() => {
                     select(null);
-                    beginEdit('__territory__', map.name);
-                  }}
-                  onTap={(event) => {
-                    event.cancelBubble = true;
-                    select(null);
-                    beginEdit('__territory__', map.name);
+                    setTerritorySelected(true);
                   }}
                 />
-              </Group>
-              <Group
-                x={Math.max(40 / zoom, map.widthMeters * unit - 76 / zoom)}
-                y={19 / zoom}
-                scaleX={1 / zoom}
-                scaleY={1 / zoom}
-              >
-                <Text text="⠿" fontSize={16} fill="#8d8e94" listening={false} />
-              </Group>
+                <Rect
+                  x={8 / zoom}
+                  y={8 / zoom}
+                  width={Math.max(5, map.widthMeters * unit - 16 / zoom)}
+                  height={35 / zoom}
+                  cornerRadius={7 / zoom}
+                  fill="#fafafa"
+                  name="territory-drag-handle"
+                />
+                <Group x={17 / zoom} y={19 / zoom} scaleX={1 / zoom} scaleY={1 / zoom}>
+                  <Text
+                    name="territory-drag-handle"
+                    fontSize={13}
+                    fontStyle="bold"
+                    text={map.name}
+                    fill="#303236"
+                    onClick={(event) => {
+                      event.cancelBubble = true;
+                      select(null);
+                      setTerritorySelected(true);
+                      beginEdit('__territory__', map.name);
+                    }}
+                    onTap={(event) => {
+                      event.cancelBubble = true;
+                      select(null);
+                      setTerritorySelected(true);
+                      beginEdit('__territory__', map.name);
+                    }}
+                  />
+                </Group>
+                <Group
+                  x={Math.max(40 / zoom, map.widthMeters * unit - 76 / zoom)}
+                  y={19 / zoom}
+                  scaleX={1 / zoom}
+                  scaleY={1 / zoom}
+                >
+                  <Text text="⠿" fontSize={16} fill="#8d8e94" listening={false} />
+                </Group>
 
-              {renderNodes(null)}
-            </Group>
+                {renderNodes(null)}
+              </Group>
+            )}
             {guides.vertical !== null && (
               <Line
                 points={[
@@ -965,8 +1436,34 @@ export function EditorCanvas({
               />
             )}
           </Group>
+          {selectionRect && (
+            <Rect
+              x={selectionRect.x}
+              y={selectionRect.y}
+              width={selectionRect.width}
+              height={selectionRect.height}
+              fill="rgba(111, 119, 130, 0.1)"
+              stroke="#7c838d"
+              strokeWidth={1}
+              listening={false}
+            />
+          )}
         </Layer>
       </Stage>
+      {!hasTerritory && (
+        <div className="canvas-empty-territory">
+          <button
+            className="canvas-empty-territory-button"
+            type="button"
+            disabled={actionsDisabled}
+            aria-label="Adicionar território"
+            onClick={() => setNodePanelOpen(true)}
+          >
+            <Plus size={28} strokeWidth={1.7} />
+          </button>
+          <span>Adicionar território</span>
+        </div>
+      )}
       <ConnectionLayer
         connections={showLinks ? [...connectionLines, ...linkedLines] : []}
         preview={connectionPreview}
@@ -987,60 +1484,62 @@ export function EditorCanvas({
         onPointerDown={gesture.onPortPointerDown}
         onKeyboardClick={gesture.onPortKeyboardClick}
       />
-      <ContextToolbar
-        actionTarget={actionTarget}
-        targetIsTerritory={targetIsTerritory}
-        actionLocked={actionLocked}
-        menuTarget={menuTarget}
-        toolbarX={toolbarX}
-        toolbarY={toolbarY}
-        viewport={viewport}
-        actionRef={actionRef}
-        onEnter={() => {
-          if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
-          setToolbarHovered(true);
-        }}
-        onLeave={() => {
-          setToolbarHovered(false);
-          releaseHover();
-        }}
-        onToggleMenu={() =>
-          setMenuTarget((previous) => (previous === actionTarget ? null : actionTarget))
-        }
-        onLock={() => runAction(lockTarget)}
-        onDelete={() => runAction(deleteTarget)}
-        onAction={runMenuAction}
-        menuEntries={menuEntries}
-      />
-      {editing && (editing.id === '__territory__' || editElement) && (
-        <input
-          ref={inputRef}
-          className="inline-edit"
-          aria-label="Editar nome"
-          value={editing.value}
-          style={{
-            left: clamp(editX, 8, Math.max(8, viewport.width - 184)),
-            top: clamp(editY, 8, Math.max(8, viewport.height - 40)),
-            width: 184,
+      <div className="canvas-ui-overlay">
+        <ContextToolbar
+          actionTarget={actionTarget}
+          targetIsTerritory={targetIsTerritory}
+          actionLocked={actionLocked}
+          menuTarget={menuTarget}
+          toolbarX={toolbarX}
+          toolbarY={toolbarY}
+          viewport={viewport}
+          actionRef={actionRef}
+          onEnter={() => {
+            if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
+            setToolbarHovered(true);
           }}
-          onChange={(event) => {
-            const next = { id: editing.id, value: event.target.value };
-            editingRef.current = next;
-            setEditing(next);
+          onLeave={() => {
+            setToolbarHovered(false);
+            releaseHover();
           }}
-          onKeyDown={(event) => {
-            event.stopPropagation();
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              commitEdit(true);
-            } else if (event.key === 'Escape') {
-              event.preventDefault();
-              commitEdit(false);
-            }
-          }}
-          onBlur={() => commitEdit(true)}
+          onToggleMenu={() =>
+            setMenuTarget((previous) => (previous === actionTarget ? null : actionTarget))
+          }
+          onLock={() => runAction(lockTarget)}
+          onDelete={() => runAction(deleteTarget)}
+          onAction={runMenuAction}
+          menuEntries={menuEntries}
         />
-      )}
+        {editing && (editing.id === '__territory__' || editElement) && (
+          <input
+            ref={inputRef}
+            className="inline-edit"
+            aria-label="Editar nome"
+            value={editing.value}
+            style={{
+              left: clamp(editX, 8, Math.max(8, viewport.width - 184)),
+              top: clamp(editY, 8, Math.max(8, viewport.height - 40)),
+              width: 184,
+            }}
+            onChange={(event) => {
+              const next = { id: editing.id, value: event.target.value };
+              editingRef.current = next;
+              setEditing(next);
+            }}
+            onKeyDown={(event) => {
+              event.stopPropagation();
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                commitEdit(true);
+              } else if (event.key === 'Escape') {
+                event.preventDefault();
+                commitEdit(false);
+              }
+            }}
+            onBlur={() => commitEdit(true)}
+          />
+        )}
+      </div>
       {overlap && (
         <div className="overlap-dialog" role="dialog" aria-label="Organizar ambientes sobrepostos">
           <div className="overlap-heading">
@@ -1091,6 +1590,33 @@ export function EditorCanvas({
         onMagnet={() => setMagnetOn((value) => !value)}
         onLinks={toggleLinks}
       />
+      <CanvasActionBar
+        nodePanelOpen={nodePanelOpen}
+        inspectorOpen={inspectorOpen}
+        actionsDisabled={actionsDisabled}
+        hasTerritory={hasTerritory}
+        onToggleNodePanel={() => setNodePanelOpen((open) => !open)}
+        onSearchNodes={() => {
+          setNodePanelOpen(true);
+          setFocusNodeSearchRevision((revision) => revision + 1);
+        }}
+        onAddArea={onAddArea}
+        onToggleInspector={onToggleInspector}
+      />
+      {nodePanelOpen && (
+        <CanvasNodePanel
+          disabled={actionsDisabled}
+          hasTerritory={hasTerritory}
+          search={nodeSearch}
+          searchInputRef={nodeSearchRef}
+          onSearchChange={setNodeSearch}
+          onAddArea={onAddArea}
+          onCreateTerritory={onCreateTerritory}
+          onAddDevice={onAddDevice}
+          onPlaceDevice={onPlaceDevice}
+          onClose={() => setNodePanelOpen(false)}
+        />
+      )}
     </div>
   );
 }

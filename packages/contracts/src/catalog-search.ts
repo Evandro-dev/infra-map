@@ -59,5 +59,9 @@ export const printDiscoveryRequestSchema = z
   .object({
     server: printServerSchema,
     credentials: windowsCredentialsSchema.optional(),
+    credentialId: z.string().trim().min(1).max(100).optional(),
   })
-  .strict();
+  .strict()
+  .refine((input) => !(input.credentials && input.credentialId), {
+    message: 'Escolha uma credencial salva ou informe uma conta temporária, não ambas.',
+  });

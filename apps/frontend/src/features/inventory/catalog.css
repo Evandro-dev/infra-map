@@ -8,3 +8,26 @@
   cursor: pointer;
   font-weight: 600;
 }
+.print-discovery-auth {
+  display: grid;
+  gap: 7px;
+  margin: 12px 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  padding: 9px 10px 10px;
+}
+.print-discovery-auth legend {
+  padding: 0 4px;
+  color: #62748a;
+  font-size: 10px;
+  font-weight: 650;
+}
+.print-discovery-auth .support-help {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.print-discovery-auth input[type='radio'] {
+  margin: 0;
+  accent-color: #4385cf;
+}

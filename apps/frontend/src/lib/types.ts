@@ -47,6 +47,7 @@ export interface MapRecord {
   name: string;
   widthMeters: number;
   heightMeters: number;
+  hasTerritory?: boolean;
   originXMeters?: number;
   originYMeters?: number;
   elements: MapElement[];

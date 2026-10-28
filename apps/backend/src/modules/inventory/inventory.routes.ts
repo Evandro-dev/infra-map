@@ -7,6 +7,7 @@ import {
 } from '@infra/contracts';
 import { printCatalogService } from './print-catalog.service.js';
 import { requireSupportOperator } from '../support/support.auth.js';
+import { credentialsService } from '../credentials/credentials.service.js';
 
 export async function inventoryRoutes(app: FastifyInstance) {
   app.get('/catalog', async (req) => {
@@ -28,8 +29,11 @@ export async function inventoryRoutes(app: FastifyInstance) {
       config: { rateLimit: { max: 6, timeWindow: '1 minute' } },
     },
     async (req) => {
-      const { server, credentials } = printDiscoveryRequestSchema.parse(req.body);
-      const snapshot = await printCatalogService.discover(server, credentials);
+      const { server, credentials, credentialId } = printDiscoveryRequestSchema.parse(req.body);
+      const account = credentialId
+        ? await credentialsService.resolveWindowsPrintServer(credentialId, server)
+        : credentials;
+      const snapshot = await printCatalogService.discover(server, account);
       return {
         server: snapshot.server,
         source: snapshot.source,

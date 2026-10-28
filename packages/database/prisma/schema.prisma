@@ -32,6 +32,7 @@ model Map {
   name          String
   widthMeters   Float           @default(120)
   heightMeters  Float           @default(80)
+  hasTerritory  Boolean         @default(true)
   originXMeters Float           @default(0)
   originYMeters Float           @default(0)
   elements      MapElement[]
@@ -189,4 +190,19 @@ model PrintCatalogSnapshot {
   payload     Json
 
   @@unique([serverKey, source])
+}
+
+// Secrets are authenticated-encrypted by the backend before they reach PostgreSQL.
+model ManagedCredential {
+  id                String   @id @default(cuid())
+  provider          String   @default("WINDOWS_PRINT_SERVER")
+  name              String
+  targetServer      String?
+  encryptedPayload  Bytes
+  encryptionNonce   Bytes
+  encryptionAuthTag Bytes
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([provider, targetServer])
 }

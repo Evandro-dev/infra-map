@@ -10,7 +10,7 @@ interface PropertiesPanelProps {
   onUpdateElement: (id: string, change: Partial<MapElement>) => void;
   onUpdateMap: (change: Partial<MapRecord>) => void;
   onRemoveElement: (id: string) => void;
-  onDeleteMap: () => void;
+  onDeleteTerritory: () => void;
   deleting: boolean;
   saving: boolean;
 }
@@ -23,7 +23,7 @@ export function PropertiesPanel({
   onUpdateElement,
   onUpdateMap,
   onRemoveElement,
-  onDeleteMap,
+  onDeleteTerritory,
   deleting,
   saving,
 }: PropertiesPanelProps) {
@@ -96,44 +96,54 @@ export function PropertiesPanel({
       <>
         <div className="inspector-heading">
           <strong>{map.name}</strong>
-          <span className="muted">Área territorial</span>
+          <span className="muted">
+            {map.hasTerritory === false ? 'Workflow sem território' : 'Área territorial'}
+          </span>
         </div>
-        <div className="grid2">
-          <NumericField
-            label="Largura (m)"
-            value={map.widthMeters}
-            min={1}
-            onChange={(v) => onUpdateMap({ widthMeters: v })}
-          />
-          <NumericField
-            label="Comprimento (m)"
-            value={map.heightMeters}
-            min={1}
-            onChange={(v) => onUpdateMap({ heightMeters: v })}
-          />
-          <NumericField
-            label="Origem X (m)"
-            value={map.originXMeters ?? 0}
-            onChange={(v) => onUpdateMap({ originXMeters: v })}
-          />
-          <NumericField
-            label="Origem Y (m)"
-            value={map.originYMeters ?? 0}
-            onChange={(v) => onUpdateMap({ originYMeters: v })}
-          />
-        </div>
-        <div className="info-card territory-area">
-          <span>Área total</span>
-          <strong>{(map.widthMeters * map.heightMeters).toLocaleString('pt-BR')} m²</strong>
-        </div>
-        <button
-          className="btn danger remove-action"
-          disabled={deleting || saving}
-          onClick={onDeleteMap}
-        >
-          <Trash2 size={17} />
-          {deleting ? 'Excluindo...' : 'Excluir território e conteúdo'}
-        </button>
+        {map.hasTerritory === false ? (
+          <p className="hint">
+            Este workflow está vazio. Use o botão + no centro do mapa para criar um território.
+          </p>
+        ) : (
+          <>
+            <div className="grid2">
+              <NumericField
+                label="Largura (m)"
+                value={map.widthMeters}
+                min={1}
+                onChange={(v) => onUpdateMap({ widthMeters: v })}
+              />
+              <NumericField
+                label="Comprimento (m)"
+                value={map.heightMeters}
+                min={1}
+                onChange={(v) => onUpdateMap({ heightMeters: v })}
+              />
+              <NumericField
+                label="Origem X (m)"
+                value={map.originXMeters ?? 0}
+                onChange={(v) => onUpdateMap({ originXMeters: v })}
+              />
+              <NumericField
+                label="Origem Y (m)"
+                value={map.originYMeters ?? 0}
+                onChange={(v) => onUpdateMap({ originYMeters: v })}
+              />
+            </div>
+            <div className="info-card territory-area">
+              <span>Área total</span>
+              <strong>{(map.widthMeters * map.heightMeters).toLocaleString('pt-BR')} m²</strong>
+            </div>
+            <button
+              className="btn danger remove-action"
+              disabled={deleting || saving}
+              onClick={onDeleteTerritory}
+            >
+              <Trash2 size={17} />
+              {deleting ? 'Limpando território...' : 'Limpar território e conteúdo'}
+            </button>
+          </>
+        )}
       </>
     );
   return <p className="hint">Crie um território para começar.</p>;

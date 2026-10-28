@@ -18,7 +18,7 @@ interface Props {
   onSupportKeyChange: (value: string) => void;
   onUpdateMap: (change: Partial<MapRecord>) => void;
   onRemoveElement: (id: string) => void;
-  onDeleteMap: () => void;
+  onDeleteTerritory: () => void;
   onDeviceSaved: (value: Device) => void;
   onRelationshipsChanged?: () => void;
   onMonitoringChanged: () => void;
@@ -33,7 +33,7 @@ export function RightSidebar({
   onSupportKeyChange,
   onUpdateMap,
   onRemoveElement,
-  onDeleteMap,
+  onDeleteTerritory,
   onDeviceSaved,
   onRelationshipsChanged,
   onMonitoringChanged,
@@ -52,9 +52,7 @@ export function RightSidebar({
     <aside className="inspector">
       <header className="inspector-top">
         <strong>Editor</strong>
-        <span>
-          {selected?.kind === 'DEVICE' ? 'Equipamento' : selected ? 'Setor' : 'Território'}
-        </span>
+        <span>{selected?.kind === 'DEVICE' ? 'Equipamento' : selected ? 'Setor' : 'Mapa'}</span>
       </header>
       <InspectorTabs
         activeTab={activeTab}
@@ -71,7 +69,7 @@ export function RightSidebar({
             onUpdateElement={update}
             onUpdateMap={onUpdateMap}
             onRemoveElement={onRemoveElement}
-            onDeleteMap={onDeleteMap}
+            onDeleteTerritory={onDeleteTerritory}
             deleting={deleting}
             saving={saving}
           />

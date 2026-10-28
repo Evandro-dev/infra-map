@@ -12,5 +12,6 @@ const schema = z.object({
   ISL_REMOTE_EXEC_ENABLED: z.enum(['true', 'false']).default('false'),
   ISL_LIGHT_EXE: z.string().default(''),
   SUPPORT_OPERATOR_TOKEN: z.string().default(''),
+  CREDENTIALS_ENCRYPTION_KEY: z.string().default(''),
 });
 export const env = schema.parse(process.env);
