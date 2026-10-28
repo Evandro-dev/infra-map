@@ -16,6 +16,7 @@ enum ElementKind {
 enum ConnectionKind {
   NETWORK
   PRINTING
+  SERVES
 }
 
 model Branch {
@@ -55,7 +56,8 @@ model Device {
   operatingSystem   String?
   assignedUser      String?
   notes             String?
-  status            String               @default("UNKNOWN")
+  credentialId      String?
+  credential        ManagedCredential?   @relation(fields: [credentialId], references: [id], onDelete: SetNull)
   elements          MapElement[]
   islComputerId     String?              @unique
   islComputerName   String?
@@ -203,6 +205,7 @@ model ManagedCredential {
   encryptionAuthTag Bytes
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+  devices           Device[]
 
   @@index([provider, targetServer])
 }

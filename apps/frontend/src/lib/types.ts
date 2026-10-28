@@ -22,7 +22,7 @@ export interface Device {
   operatingSystem: string | null;
   assignedUser: string | null;
   notes: string | null;
-  status: string;
+  credentialId: string | null;
 }
 export interface MapElement {
   id: string;
@@ -91,7 +91,7 @@ export interface MapConnection {
   mapId: string;
   sourceElementId: string;
   targetElementId: string;
-  kind?: 'NETWORK' | 'PRINTING';
+  kind?: 'NETWORK' | 'PRINTING' | 'SERVES';
   printerAssignmentId?: string | null;
   createdAt?: string;
 }

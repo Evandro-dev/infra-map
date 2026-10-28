@@ -29,15 +29,20 @@ export const monitorConfigSchema = z
       });
   });
 export type MonitorConfig = z.infer<typeof monitorConfigSchema>;
-export type MonitorSource = 'ISL' | 'WINDOWS' | 'PRINT_SERVER' | 'TCP' | 'ISL_DIAGNOSTIC';
+export type MonitorSource = 'ISL' | 'WINDOWS' | 'PRINT_SERVER' | 'TCP' | 'PING' | 'ISL_DIAGNOSTIC';
 export type ObservationStatus = 'OK' | 'WARNING' | 'CRITICAL' | 'UNKNOWN' | 'UNAVAILABLE';
 export type MonitorState =
   'OK' | 'WARNING' | 'CRITICAL' | 'PARTIAL' | 'UNKNOWN' | 'STALE' | 'DISABLED';
 export interface PrinterRelationHealth {
   printerId: string;
   printerName: string;
+  relationType?: 'LOCAL' | 'SHARED';
   status: ObservationStatus;
   summary: string;
+  expectedQueue?: string;
+  observedQueue?: string | null;
+  expectedPort?: string | null;
+  observedPort?: string | null;
   expectedDriver: string | null;
   observedDriver: string | null;
 }

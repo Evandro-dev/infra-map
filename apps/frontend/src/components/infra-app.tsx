@@ -704,6 +704,15 @@ export function InfraApp({
             }}
             onAddDevice={(kind) => void addDevice(kind)}
             onPlaceDevice={placeDevice}
+            onOpenDevice={(nodeId) => {
+              if (isDraft) {
+                setError('Salve o workflow antes de abrir os parâmetros deste dispositivo.');
+                return;
+              }
+              router.push(
+                `/workflow/${encodeURIComponent(workflowId)}/${encodeURIComponent(nodeId)}`,
+              );
+            }}
             onActionError={setError}
           />
         ) : (
@@ -725,6 +734,13 @@ export function InfraApp({
         onDeleteTerritory={() => void deleteTerritory()}
         onDeviceSaved={(value) => {
           updateDevice(value.id, value);
+        }}
+        onOpenDevice={(nodeId) => {
+          if (isDraft) {
+            setError('Salve o workflow antes de abrir os parâmetros deste dispositivo.');
+            return;
+          }
+          router.push(`/workflow/${encodeURIComponent(workflowId)}/${encodeURIComponent(nodeId)}`);
         }}
         onRelationshipsChanged={() => setLinkRevision((value) => value + 1)}
         onMonitoringChanged={() => setMonitorRevision((value) => value + 1)}

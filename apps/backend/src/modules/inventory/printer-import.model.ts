@@ -24,8 +24,6 @@ export function preparePrinterImport(input: unknown) {
       printServer: printer.servidor_impressao,
       printShare: printer.nome_compartilhamento,
       approvedDriver: printer.driver_no_servidor,
-      // Um teste antigo não é uma medição atual. Patrimônio e série permanecem nulos.
-      status: 'UNKNOWN',
       notes: [
         `Fonte: cadastro técnico fornecido de ${source.empresa_unidade}, em ${source.data_do_cadastro}.`,
         `Local informado: ${printer.setor_ou_local}.`,

@@ -107,6 +107,13 @@ test('arraste acompanha controles em tempo real; ligação de impressão e monit
     await page.getByRole('button', { name: 'Autorizar monitoramento', exact: true }).click();
     await page.getByLabel('Monitoramento automático', { exact: true }).check();
     await page.getByLabel('Verificar uma porta TCP conhecida', { exact: true }).check();
+    const ipField = page.getByRole('textbox', {
+      name: 'Endereço IP do equipamento',
+      exact: true,
+    });
+    await ipField.fill('192.168.27.201');
+    await expect(ipField).toHaveValue('192.168.27.201');
+    await ipField.fill('127.0.0.1');
     await page.getByLabel('Porta TCP', { exact: true }).fill('4001');
     await page.getByRole('button', { name: 'Salvar monitoramento', exact: true }).click();
     await expect(page.getByText('Configuração salva.', { exact: true })).toBeVisible();
@@ -116,9 +123,9 @@ test('arraste acompanha controles em tempo real; ligação de impressão e monit
     ).toBeVisible();
     await expect(page.getByText('Porta TCP · Sem alertas', { exact: true })).toBeVisible();
     await page.screenshot({ path: 'artifacts/monitoramento-computador.png' });
-    expect((await prisma.device.findUniqueOrThrow({ where: { id: deviceIds[0] } })).status).toBe(
-      'UNKNOWN',
-    );
+    expect(
+      'status' in (await prisma.device.findUniqueOrThrow({ where: { id: deviceIds[0] } })),
+    ).toBe(false);
     expect(errors).toEqual([]);
   } finally {
     if (mapId) await request.delete(`/api/v1/maps/${mapId}`);

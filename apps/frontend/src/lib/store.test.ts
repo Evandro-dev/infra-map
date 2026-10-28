@@ -23,7 +23,7 @@ const device: Device = {
   operatingSystem: null,
   assignedUser: null,
   notes: null,
-  status: 'ACTIVE',
+  credentialId: null,
 };
 
 const placement = (id: string): MapElement => ({
@@ -58,7 +58,6 @@ describe('identidade do inventário no editor', () => {
       ...device,
       id: 'copied-device',
       name: 'PC-RH (cópia)',
-      status: 'UNKNOWN',
     };
     useEditorStore.getState().duplicate('first', { [device.id]: copy });
     expect(useEditorStore.getState().elements.map((element) => element.name)).toEqual([
@@ -111,7 +110,6 @@ describe('identidade do inventário no editor', () => {
       ...device,
       id: 'copied-device',
       name: 'PC-RH (cópia)',
-      status: 'UNKNOWN',
     };
     useEditorStore.getState().duplicate('first', { [device.id]: copy });
     const [original, duplicate] = useEditorStore.getState().elements;
@@ -137,7 +135,6 @@ describe('identidade do inventário no editor', () => {
       ...device,
       id: 'pasted-device',
       name: 'PC-RH (cópia)',
-      status: 'UNKNOWN',
     };
     useEditorStore.getState().pasteAt({ x: 20, y: 20 }, undefined, { [device.id]: copy });
 

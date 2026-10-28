@@ -20,8 +20,8 @@ describe('cadastro técnico fornecido', () => {
       ipAddress: '192.168.27.202',
       printShare: 'ECO-POA-RHU-P01',
       approvedDriver: 'EPSON WF-M5899 Series',
-      status: 'UNKNOWN',
     });
+    expect(rows[0]).not.toHaveProperty('status');
     expect(rows[1].macAddress).toBeNull();
     expect(rows[1]).not.toHaveProperty('serialNumber');
     expect(rows[1].notes).toContain('Pendências:');

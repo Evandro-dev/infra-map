@@ -139,9 +139,9 @@ try {
   const monitored = await monitoring.run(computerId);
   assert.equal(monitored.health.observations[0].status, 'CRITICAL');
   assert.equal(
-    (await prisma.device.findUniqueOrThrow({ where: { id: computerId } })).status,
-    'UNKNOWN',
-    'Monitor sobrescreveu o estado manual',
+    'status' in (await prisma.device.findUniqueOrThrow({ where: { id: computerId } })),
+    false,
+    'Estado deve ser calculado pelas leituras de monitoramento',
   );
   const monitorPage = await app.inject(`/api/v1/monitoring/maps/${map.id}?page=1`);
   assert.equal(monitorPage.statusCode, 200, monitorPage.body);

@@ -23,4 +23,21 @@ describe('cliente HTTP', () => {
     );
     await expect(api('/devices/id')).rejects.toThrow('Equipamento inexistente');
   });
+  it('shows the validation detail returned with a generic backend error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        Response.json(
+          {
+            error: 'Invalid data',
+            issues: [
+              { path: ['targetServer'], message: 'Use a server name without a share path.' },
+            ],
+          },
+          { status: 400 },
+        ),
+      ),
+    );
+    await expect(api('/credentials')).rejects.toThrow('Use a server name without a share path.');
+  });
 });

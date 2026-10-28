@@ -147,9 +147,11 @@ export function CredentialsPage({ scope = 'overview' }: { scope?: WorkspaceScope
           <div className={styles.gateHeading}>
             <h2>Cofre de credenciais protegido</h2>
             <p>
-              Informe a chave de suporte para consultar ou cadastrar credenciais. Ela permanece
-              somente na memória desta página.
+              O acesso exige <code>SUPPORT_OPERATOR_TOKEN</code> de <code>apps/backend/.env</code>.{' '}
+              <code>CREDENTIALS_ENCRYPTION_KEY</code> apenas cifra os dados e não serve para acessar
+              o cofre.
             </p>
+            <p>A chave de suporte permanece somente na memória desta página.</p>
           </div>
           <form onSubmit={(event) => void unlock(event)}>
             <label className={styles.field}>

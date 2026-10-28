@@ -1072,6 +1072,21 @@ button:disabled {
   padding: 0;
   gap: 15px;
 }
+.inspector-workbench-open {
+  min-height: 32px;
+  margin: 8px 12px 0;
+  border: 1px solid #e0e0e4;
+  border-radius: 6px;
+  background: #fff;
+  color: #4b4b52;
+  font-size: 11px;
+  font-weight: 560;
+  cursor: pointer;
+}
+.inspector-workbench-open:hover {
+  border-color: #c6c6cd;
+  background: #f8f8f9;
+}
 .inspector-content .support-header {
   margin-top: 0;
 }

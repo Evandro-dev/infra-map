@@ -18,7 +18,6 @@ const device = {
   operatingSystem: null,
   assignedUser: null,
   notes: null,
-  status: 'UNKNOWN',
   printServer: null,
   printShare: null,
   approvedDriver: null,

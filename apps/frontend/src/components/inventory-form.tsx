@@ -42,13 +42,6 @@ const typedFields: Partial<Record<DeviceKind, [keyof Device, string][]>> = {
     ['assignedUser', 'Usuário principal'],
   ],
 };
-const statuses = [
-  ['UNKNOWN', 'Desconhecido'],
-  ['ONLINE', 'Online (informado)'],
-  ['OFFLINE', 'Offline (informado)'],
-  ['DEGRADED', 'Com alerta'],
-  ['MAINTENANCE', 'Em manutenção'],
-];
 export function InventoryForm({
   device,
   effectiveName,
@@ -68,9 +61,7 @@ export function InventoryForm({
   const changed =
     fields.some(
       ([key]) => (key === 'name' ? currentName : (form[key] ?? '')) !== (device[key] ?? ''),
-    ) ||
-    form.status !== device.status ||
-    form.notes !== device.notes;
+    ) || form.notes !== device.notes;
   async function save() {
     if (!currentName.trim()) {
       setError('Informe o nome do equipamento.');
@@ -82,7 +73,6 @@ export function InventoryForm({
     try {
       const payload = {
         name: currentName.trim(),
-        status: form.status,
         ...Object.fromEntries(
           fields
             .filter(([key]) => key !== 'name')
@@ -173,24 +163,6 @@ export function InventoryForm({
             disabled={saving}
           />
         )}
-        <label className="form-row">
-          <span className="muted">Estado informado manualmente</span>
-          <select
-            className="field"
-            disabled={saving}
-            value={form.status}
-            onChange={(e) => {
-              setSaved(false);
-              setDraft((f) => ({ ...f, status: e.target.value }));
-            }}
-          >
-            {statuses.map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
         <label className="form-row">
           <span className="muted">Observações</span>
           <textarea

@@ -162,6 +162,7 @@ export const mapsRepository = {
       if (existing) return { created: false, connection: existing };
       const computer = nodes.find((node) => node.device?.kind === 'COMPUTER')?.device;
       const printer = nodes.find((node) => node.device?.kind === 'PRINTER')?.device;
+      const server = nodes.find((node) => node.device?.kind === 'SERVER')?.device;
       const assignment =
         computer && printer
           ? await tx.printerAssignment.upsert({
@@ -175,6 +176,13 @@ export const mapsRepository = {
           where: { deviceId: computer.id },
           data: { nextRunAt: new Date() },
         });
+      const normalizeServer = (value: string) =>
+        value.replaceAll(String.fromCharCode(92), '').trim().toLocaleLowerCase('en-US');
+      const servesPrinter = Boolean(
+        server?.hostname &&
+        printer?.printServer &&
+        normalizeServer(server.hostname) === normalizeServer(printer.printServer),
+      );
       // Ligações não direcionadas: canonicalizar evita duplicatas invertidas.
       const [sourceElementId, targetElementId] = [source, target].sort();
       return {
@@ -184,7 +192,7 @@ export const mapsRepository = {
             mapId,
             sourceElementId,
             targetElementId,
-            kind: assignment ? 'PRINTING' : 'NETWORK',
+            kind: assignment ? 'PRINTING' : servesPrinter ? 'SERVES' : 'NETWORK',
             printerAssignmentId: assignment?.id ?? null,
           },
         }),

@@ -20,6 +20,7 @@ interface Props {
   onRemoveElement: (id: string) => void;
   onDeleteTerritory: () => void;
   onDeviceSaved: (value: Device) => void;
+  onOpenDevice: (elementId: string) => void;
   onRelationshipsChanged?: () => void;
   onMonitoringChanged: () => void;
   deleting: boolean;
@@ -35,6 +36,7 @@ export function RightSidebar({
   onRemoveElement,
   onDeleteTerritory,
   onDeviceSaved,
+  onOpenDevice,
   onRelationshipsChanged,
   onMonitoringChanged,
   deleting,
@@ -59,6 +61,15 @@ export function RightSidebar({
         onChange={setTab}
         deviceSelected={selected?.kind === 'DEVICE'}
       />
+      {selected?.kind === 'DEVICE' && (
+        <button
+          className="inspector-workbench-open"
+          type="button"
+          onClick={() => onOpenDevice(selected.id)}
+        >
+          Abrir parâmetros e diagnósticos
+        </button>
+      )}
       <div className="inspector-content">
         <InspectorBreadcrumb map={map} selected={selected} elements={elements} />
         {activeTab === 'properties' && (
@@ -81,6 +92,7 @@ export function RightSidebar({
             device={selected.device}
             accessKey={supportAccessKey}
             onKeyChange={onSupportKeyChange}
+            onDeviceSaved={onDeviceSaved}
             onChanged={onMonitoringChanged}
           />
         )}

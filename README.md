@@ -12,6 +12,8 @@ npm run setup
 npm run dev
 ```
 
+Na tela `/credentials`, use `SUPPORT_OPERATOR_TOKEN` de `apps/backend/.env`. `CREDENTIALS_ENCRYPTION_KEY` serve apenas para cifrar os dados. O setup preserva valores já preenchidos e completa tokens ausentes ou vazios; reinicie o backend após editar o `.env`.
+
 `setup` cria arquivos de ambiente ausentes e gera segredos locais; valores existentes são preservados e a chave do cofre só é gerada quando está ausente ou vazia. `dev` inicia PostgreSQL, aplica as migrations pendentes, gera o Prisma Client e inicia API, frontend e worker. O worker consulta somente equipamentos com monitoramento habilitado. Não recria mapas de exemplo.
 
 - Interface: http://127.0.0.1:3000

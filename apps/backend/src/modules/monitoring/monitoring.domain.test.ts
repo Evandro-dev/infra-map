@@ -11,6 +11,8 @@ const printer = {
   name: 'RH',
   printServer: 'SRV-PRINT',
   printShare: 'RH',
+  printQueue: 'RH',
+  printPort: null,
   approvedDriver: 'Epson',
 };
 const report: WindowsComputerReport = {
@@ -63,7 +65,6 @@ describe('comparação de computador e impressora', () => {
       true,
     )[0];
     expect(result.status).toBe('UNKNOWN');
-    expect(result.summary).toContain('perfil do usuário');
     expect(compareExpectedPrinters([printer], [], false)[0].status).toBe('UNKNOWN');
     expect(
       compareExpectedPrinters([printer], [{ ...queue, DriverName: null }], true)[0],
@@ -77,6 +78,43 @@ describe('comparação de computador e impressora', () => {
     expect(computerHealth({ ...report, warnings: ['Sem permissões'] }, []).status).toBe('WARNING');
   });
 });
+describe('printer relation evidence', () => {
+  it('matches an installed WSD queue by its exact name and observed port', () => {
+    const local = {
+      ...printer,
+      printServer: null,
+      printShare: null,
+      printQueue: 'ECO-POA-FCA-P01 (WF-M5899 Series)',
+      printPort: 'WSD-c5e2382a-072f-4598-8026-975f20afe4d0',
+      approvedDriver: null,
+    };
+    const observed = {
+      ...queue,
+      Name: local.printQueue,
+      PortName: local.printPort,
+      DriverName: 'Microsoft IPP Class Driver',
+    };
+    expect(compareExpectedPrinters([local], [observed], true)[0]).toMatchObject({
+      status: 'OK',
+      relationType: 'LOCAL',
+      observedQueue: local.printQueue,
+      observedPort: local.printPort,
+    });
+    expect(
+      compareExpectedPrinters([{ ...local, printPort: 'WSD-other' }], [observed], true)[0].status,
+    ).toBe('WARNING');
+  });
+
+  it('does not accept a UNC queue hosted by a different server', () => {
+    const otherServerQueue = {
+      ...queue,
+      Name: String.raw`\\OTHER\RH`,
+      ComputerName: 'PC-RH',
+    };
+    expect(compareExpectedPrinters([printer], [otherServerQueue], true)[0].status).toBe('UNKNOWN');
+  });
+});
+
 describe('estado agregado sem inventar disponibilidade', () => {
   const config = monitorConfigSchema.parse({ enabled: true, useIsl: true, useWindows: true });
   it('ISL online com Windows sem permissão é parcial, e nunca totalmente OK', () => {

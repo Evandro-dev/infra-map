@@ -42,7 +42,6 @@ describe('clonagem de equipamentos', () => {
       hostname: null,
       assignedUser: null,
       notes: null,
-      status: 'UNKNOWN',
       islComputerId: null,
       islComputerName: null,
     });

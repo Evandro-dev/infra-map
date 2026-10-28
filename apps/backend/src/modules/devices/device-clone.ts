@@ -44,7 +44,6 @@ export function cloneDeviceData(source: DeviceCloneInput) {
     hostname: null,
     assignedUser: null,
     notes: null,
-    status: 'UNKNOWN',
     islComputerId: null,
     islComputerName: null,
   };

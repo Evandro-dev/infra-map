@@ -7,6 +7,11 @@ type DeviceChange = z.infer<typeof updateDeviceSchema>;
 type DeviceRecord = Awaited<ReturnType<typeof prisma.device.create>>;
 export const devicesRepository = {
   list: () => prisma.device.findMany({ orderBy: { name: 'asc' } }),
+  findForUpdate: (id: string) =>
+    prisma.device.findUnique({
+      where: { id },
+      select: { id: true, name: true, kind: true, printServer: true, credentialId: true },
+    }),
   create: (data: {
     name: string;
     kind: string;

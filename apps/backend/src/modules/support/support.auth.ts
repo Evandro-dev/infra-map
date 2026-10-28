@@ -16,5 +16,7 @@ export async function requireSupportOperator(req: FastifyRequest, reply: Fastify
   const a = Buffer.from(configured),
     b = Buffer.from(token);
   if (a.length !== b.length || !timingSafeEqual(a, b))
-    return reply.code(401).send({ error: 'Chave de suporte inválida.' });
+    return reply.code(401).send({
+      error: 'Chave de suporte inválida. Use SUPPORT_OPERATOR_TOKEN de apps/backend/.env.',
+    });
 }

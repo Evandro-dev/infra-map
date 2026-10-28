@@ -3,12 +3,28 @@ import { z } from 'zod';
 export const printServerSchema = z
   .string()
   .trim()
-  .min(1)
-  .max(180)
-  .regex(
-    /^(?=.{1,180}$)[a-z\d](?:[a-z\d.-]*[a-z\d])?$/i,
-    'Informe um nome de servidor ou IPv4, sem barras, espaços ou comandos.',
+  .transform((value) => (value.startsWith('\\\\') ? value.slice(2) : value))
+  .pipe(
+    z
+      .string()
+      .min(1)
+      .max(180)
+      .regex(
+        /^(?=.{1,180}$)[a-z\d](?:[a-z\d.-]*[a-z\d])?$/i,
+        'Informe um nome de servidor ou IPv4, sem caminho de compartilhamento, espaços ou comandos.',
+      ),
   );
+
+export function samePrintServer(left: string, right: string) {
+  const normalizedLeft = printServerSchema.safeParse(left);
+  const normalizedRight = printServerSchema.safeParse(right);
+  return (
+    normalizedLeft.success &&
+    normalizedRight.success &&
+    normalizedLeft.data.toLocaleLowerCase('en-US') ===
+      normalizedRight.data.toLocaleLowerCase('en-US')
+  );
+}
 
 const optionalText = z.string().trim().max(400).nullable();
 export const printSnapshotSchema = z

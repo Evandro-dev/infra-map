@@ -24,6 +24,8 @@ interface ExpectedPrinter {
   name: string;
   printServer: string | null;
   printShare: string | null;
+  printQueue: string | null;
+  printPort: string | null;
   approvedDriver: string | null;
 }
 export function defaultMonitorConfig(device: Target): MonitorConfig {
@@ -56,37 +58,79 @@ export function compareExpectedPrinters(
   available: boolean,
 ): PrinterRelationHealth[] {
   return expected.map((printer) => {
+    const shared = Boolean(printer.printServer && printer.printShare);
+    const expectedQueue = printer.printQueue || printer.printShare || printer.name;
     const result: PrinterRelationHealth = {
       printerId: printer.id,
       printerName: printer.name,
+      relationType: shared ? 'SHARED' : 'LOCAL',
       status: 'UNKNOWN',
-      summary: 'Cadastre servidor e compartilhamento para comparar.',
+      summary: shared
+        ? 'Fila compartilhada aguardando comparação com o Windows.'
+        : 'Fila local aguardando comparação com o Windows.',
+      expectedQueue,
+      observedQueue: null,
+      expectedPort: printer.printPort,
+      observedPort: null,
       expectedDriver: printer.approvedDriver,
       observedDriver: null,
     };
     if (!available)
       return {
         ...result,
-        summary:
-          'Filas indisponíveis para a coleta remota; conferir no perfil do usuário pelo ISL.',
+        summary: 'Filas indisponíveis para a coleta remota; a relação permanece sem confirmação.',
       };
-    if (!printer.printServer || !printer.printShare) return result;
-    const server = printer.printServer.replace(/^\\+/, '').toLowerCase();
-    const share = printer.printShare.toLowerCase();
-    const match = rows.find(
-      (row) =>
-        row.Name.toLowerCase() === `\\\\${server}\\${share}` ||
-        (row.ComputerName?.replace(/^\\+/, '').toLowerCase() === server &&
-          (row.Name.toLowerCase() === share || row.ShareName?.toLowerCase() === share)),
-    );
+
+    const removeSlashes = (value: string) => value.replaceAll(String.fromCharCode(92), '').trim();
+    const server = removeSlashes(printer.printServer ?? '').toLowerCase();
+    const share = printer.printShare?.toLowerCase() ?? '';
+    const queue = expectedQueue.trim().toLowerCase();
+    const matchesUnc = (value: string | null) => {
+      if (!value) return false;
+      const parts = value
+        .replaceAll('/', String.fromCharCode(92))
+        .split(String.fromCharCode(92))
+        .filter(Boolean);
+      return parts[0]?.toLowerCase() === server && parts[1]?.toLowerCase() === share;
+    };
+    const match = rows.find((row) => {
+      if (!shared) return row.Name.trim().toLowerCase() === queue;
+      const name = row.Name.trim().toLowerCase();
+      const computer = removeSlashes(row.ComputerName ?? '').toLowerCase();
+      return (
+        matchesUnc(row.Name) ||
+        matchesUnc(row.PortName) ||
+        (computer === server && (name === share || row.ShareName?.toLowerCase() === share))
+      );
+    });
     if (!match)
       return {
         ...result,
-        summary: 'Fila não vista pela coleta remota. Isso não prova ausência no perfil do usuário.',
+        summary: shared
+          ? 'Fila compartilhada não apareceu nesta leitura do Windows; a ausência não foi confirmada.'
+          : 'Fila local não apareceu nesta leitura do Windows; a ausência não foi confirmada.',
+      };
+
+    const observedPort = match.PortName?.trim() || null;
+    const observed = {
+      ...result,
+      observedQueue: match.Name,
+      observedPort,
+      observedDriver: match.DriverName,
+    };
+    if (
+      printer.printPort &&
+      observedPort &&
+      observedPort.toLowerCase() !== printer.printPort.toLowerCase()
+    )
+      return {
+        ...observed,
+        status: 'WARNING',
+        summary: 'Fila encontrada, mas a porta observada difere da porta cadastrada.',
       };
     if (printer.approvedDriver && !match.DriverName)
       return {
-        ...result,
+        ...observed,
         summary: 'Fila encontrada, mas a coleta não informou o driver para comparação.',
       };
     if (
@@ -94,17 +138,16 @@ export function compareExpectedPrinters(
       match.DriverName?.toLowerCase() !== printer.approvedDriver.toLowerCase()
     )
       return {
-        ...result,
+        ...observed,
         status: 'WARNING',
-        observedDriver: match.DriverName,
         summary: 'O driver observado difere do padrão cadastrado.',
       };
     return {
-      ...result,
+      ...observed,
       status: 'OK',
-      observedDriver: match.DriverName,
-      summary:
-        'Servidor, fila e driver correspondem ao cadastro; impressão física não foi testada.',
+      summary: shared
+        ? 'Fila compartilhada, porta e driver foram observados no computador; impressão física não foi testada.'
+        : 'Fila local e porta foram observadas no computador; o IP físico WSD não foi informado.',
     };
   });
 }
@@ -170,7 +213,8 @@ export function deviceHealth(
   const selected = monitorSources(config);
   const ageLimit = Math.max(config.intervalSeconds * 3, 90) * 1000;
   const relevant = observations.filter(
-    (row) => selected.includes(row.source) || row.source === 'ISL_DIAGNOSTIC',
+    (row) =>
+      selected.includes(row.source) || row.source === 'ISL_DIAGNOSTIC' || row.source === 'PING',
   );
   const fresh = relevant.filter(
     (row) => now.getTime() - new Date(row.checkedAt).getTime() <= ageLimit,

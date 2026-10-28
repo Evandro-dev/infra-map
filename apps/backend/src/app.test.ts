@@ -8,6 +8,7 @@ vi.mock('./config/env.js', () => ({
     ISL_API_PASSWORD: '',
     ISL_REMOTE_EXEC_ENABLED: 'false',
     SUPPORT_OPERATOR_TOKEN: 'test-operator-key-at-least-32-characters',
+    CREDENTIALS_ENCRYPTION_KEY: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
     ISL_LIGHT_EXE: '',
   },
 }));
@@ -16,6 +17,17 @@ vi.mock('@infra/database', () => ({
     $disconnect: vi.fn().mockResolvedValue(undefined),
     $queryRaw: vi.fn().mockResolvedValue([{ value: 1 }]),
     device: { findUnique: vi.fn().mockResolvedValue(null) },
+    managedCredential: {
+      findMany: vi.fn().mockResolvedValue([]),
+      create: vi.fn().mockResolvedValue({
+        id: 'credential-1',
+        provider: 'WINDOWS_PRINT_SERVER',
+        name: 'Print Server account',
+        targetServer: 'srv-sky-prt-01',
+        createdAt: new Date('2026-10-28T12:00:00.000Z'),
+        updatedAt: new Date('2026-10-28T12:00:00.000Z'),
+      }),
+    },
   },
 }));
 import { buildApp } from './app.js';
@@ -27,6 +39,43 @@ afterAll(() => app.close());
 const headers = { 'x-support-token': 'test-operator-key-at-least-32-characters' };
 
 describe('API HTTP', () => {
+  it('explains which local secret authorizes the credentials vault', async () => {
+    const missingToken = await app.inject({ url: '/api/v1/credentials' });
+    const encryptionKey = await app.inject({
+      url: '/api/v1/credentials',
+      headers: { 'x-support-token': 'test-only-encryption-key' },
+    });
+    const supportToken = await app.inject({ url: '/api/v1/credentials', headers });
+
+    expect(missingToken.statusCode).toBe(401);
+    expect(missingToken.json().error).toContain('SUPPORT_OPERATOR_TOKEN');
+    expect(missingToken.json().error).not.toContain('CREDENTIALS_ENCRYPTION_KEY');
+    expect(encryptionKey.statusCode).toBe(401);
+    expect(supportToken.statusCode).toBe(200);
+    expect(supportToken.json()).toEqual({ credentials: [] });
+  });
+  it('accepts UNC print server names and UPN style Windows accounts', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/credentials',
+      headers,
+      payload: {
+        provider: 'WINDOWS_PRINT_SERVER',
+        name: 'Print Server account',
+        targetServer: '\\\\srv-sky-prt-01',
+        username: 'operator@corp.example',
+        password: 'test-only-secret',
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      id: 'credential-1',
+      targetServer: 'srv-sky-prt-01',
+    });
+    expect(response.json()).not.toHaveProperty('username');
+    expect(response.json()).not.toHaveProperty('password');
+  });
   it('protege configuração e execução do monitoramento e limita a paginação', async () => {
     for (const [method, url] of [
       ['GET', '/devices/pc'],

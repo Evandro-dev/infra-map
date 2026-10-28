@@ -18,6 +18,9 @@ export async function monitoringRoutes(app: FastifyInstance) {
     protectedRoutes.get('/devices/:deviceId', async (req) =>
       monitoringService.detail(deviceParams.parse(req.params).deviceId),
     );
+    protectedRoutes.post('/devices/:deviceId/ping', async (req) =>
+      monitoringService.ping(deviceParams.parse(req.params).deviceId),
+    );
     protectedRoutes.put('/devices/:deviceId', async (req) =>
       monitoringService.configure(
         deviceParams.parse(req.params).deviceId,

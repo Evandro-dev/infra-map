@@ -19,6 +19,21 @@ function toSummary(item: Summary) {
   return { ...item, provider: 'WINDOWS_PRINT_SERVER' as const };
 }
 
+async function requireWindowsPrintCredential(id: string, requestedServer: string) {
+  const current = await credentialsRepository.find(id);
+  if (!current) throw new AppError(404, 'Credencial não encontrada.');
+  if (current.provider !== 'WINDOWS_PRINT_SERVER')
+    throw new AppError(400, 'Esta credencial não pode consultar um servidor de impressão.');
+  const target = normalizedServer(requestedServer);
+  if (!target) throw new AppError(400, 'Cadastre o servidor associado à credencial.');
+  if (
+    current.targetServer &&
+    current.targetServer.toLocaleLowerCase('en-US') !== target.toLocaleLowerCase('en-US')
+  )
+    throw new AppError(400, 'Esta credencial foi cadastrada para outro servidor de impressão.');
+  return { current, target };
+}
+
 export const credentialsService = {
   async list() {
     return (await credentialsRepository.list()).map(toSummary);
@@ -62,21 +77,14 @@ export const credentialsService = {
     if (!current) throw new AppError(404, 'Credencial não encontrada.');
     await credentialsRepository.delete(id);
   },
+  async validateDeviceAssignment(id: string, serverName: string) {
+    await requireWindowsPrintCredential(id, serverName);
+  },
   async resolveWindowsPrintServer(
     id: string,
     requestedServer: string,
   ): Promise<WindowsCredentials> {
-    const current = await credentialsRepository.find(id);
-    if (!current) throw new AppError(404, 'Credencial não encontrada.');
-    if (current.provider !== 'WINDOWS_PRINT_SERVER')
-      throw new AppError(400, 'Esta credencial não pode consultar um servidor de impressão.');
-    const target = normalizedServer(requestedServer);
-    if (
-      current.targetServer &&
-      target &&
-      current.targetServer.toLocaleLowerCase('en-US') !== target.toLocaleLowerCase('en-US')
-    )
-      throw new AppError(400, 'Esta credencial foi cadastrada para outro servidor de impressão.');
+    const { current } = await requireWindowsPrintCredential(id, requestedServer);
     return decryptCredentialSecret({
       payload: Buffer.from(current.encryptedPayload),
       nonce: Buffer.from(current.encryptionNonce),

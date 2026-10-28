@@ -20,7 +20,9 @@ import { isl } from '../support/isl.client.js';
 import { windowsComputerClient, validateMonitorHost } from './adapters/windows-computer.client.js';
 import { windowsPrintClient } from '../inventory/adapters/windows-print.client.js';
 import { printCatalogRepository } from '../inventory/print-catalog.repository.js';
+import { credentialsService } from '../credentials/credentials.service.js';
 import { tcpClient } from './adapters/tcp.client.js';
+import { pingClient } from './adapters/ping.client.js';
 import { AppError } from '../../shared/errors.js';
 
 interface Dependencies {
@@ -29,7 +31,9 @@ interface Dependencies {
   windows: typeof windowsComputerClient;
   print: typeof windowsPrintClient;
   tcp: typeof tcpClient;
+  ping: typeof pingClient;
   saveSnapshot: typeof printCatalogRepository.save;
+  credentials: typeof credentialsService;
 }
 export function createMonitoringService(input: Partial<Dependencies> = {}) {
   const deps: Dependencies = {
@@ -38,7 +42,9 @@ export function createMonitoringService(input: Partial<Dependencies> = {}) {
     windows: windowsComputerClient,
     print: windowsPrintClient,
     tcp: tcpClient,
+    ping: pingClient,
     saveSnapshot: (snapshot) => printCatalogRepository.save(snapshot),
+    credentials: credentialsService,
     ...input,
   };
   const get = async (id: string) => {
@@ -149,6 +155,14 @@ export function createMonitoringService(input: Partial<Dependencies> = {}) {
                 freeMemoryPercent: report.freeMemoryPercent,
                 disks: report.disks,
                 warnings: report.warnings,
+                printersAvailable: report.printersAvailable,
+                printers: report.printers.map((printer) => ({
+                  name: printer.Name,
+                  driver: printer.DriverName,
+                  port: printer.PortName,
+                  server: printer.ComputerName,
+                  share: printer.ShareName,
+                })),
                 relations,
               },
             };
@@ -160,7 +174,16 @@ export function createMonitoringService(input: Partial<Dependencies> = {}) {
               shared.servers.set(
                 key,
                 deps.print
-                  .collect(server, undefined, config.timeoutSeconds * 1000 + 3000)
+                  .collect(
+                    server,
+                    target.credentialId
+                      ? await deps.credentials.resolveWindowsPrintServer(
+                          target.credentialId,
+                          server,
+                        )
+                      : undefined,
+                    config.timeoutSeconds * 1000 + 3000,
+                  )
                   .then(async (snapshot) => {
                     await deps.saveSnapshot(snapshot);
                     return snapshot;
@@ -178,12 +201,23 @@ export function createMonitoringService(input: Partial<Dependencies> = {}) {
                 status: 'WARNING',
                 summary: 'Fila esperada não encontrada no servidor cadastrado.',
               };
+            const data = {
+              server,
+              queueName: queue.name,
+              shareName: queue.shareName,
+              driver: queue.driverName,
+              queueStatus: queue.status ?? null,
+              portName: queue.portName,
+              hostAddress: queue.hostAddress,
+              protocol: queue.protocol,
+              portNumber: queue.portNumber,
+            };
             const result = printerQueueStatus(queue.status);
             if (target.approvedDriver && !queue.driverName)
               return {
                 status: result.status === 'WARNING' ? 'WARNING' : 'UNKNOWN',
                 summary: `${result.summary} Driver não informado para comparação.`,
-                data: { queueName: queue.name, driver: null, queueStatus: queue.status ?? null },
+                data,
               };
             if (
               target.approvedDriver &&
@@ -192,19 +226,58 @@ export function createMonitoringService(input: Partial<Dependencies> = {}) {
               return {
                 status: 'WARNING',
                 summary: 'Driver da fila difere do padrão cadastrado.',
+                data,
+              };
+            const expectedHost = target.ipAddress || target.printPort;
+            if (
+              expectedHost &&
+              queue.hostAddress &&
+              expectedHost.toLowerCase() !== queue.hostAddress.toLowerCase()
+            )
+              return {
+                status: 'WARNING',
+                summary: 'Fila e driver encontrados, mas a porta aponta para outro endereço.',
+                data: { ...data, expectedHost },
+              };
+            if (
+              target.printProtocol &&
+              queue.protocol &&
+              target.printProtocol.toLowerCase() !== queue.protocol.toLowerCase()
+            )
+              return {
+                status: 'WARNING',
+                summary: 'O protocolo observado na porta difere do cadastro.',
+                data: { ...data, expectedProtocol: target.printProtocol },
+              };
+            if (
+              target.printPortNumber &&
+              queue.portNumber &&
+              target.printPortNumber !== queue.portNumber
+            )
+              return {
+                status: 'WARNING',
+                summary: 'A porta TCP observada na fila difere do cadastro.',
+                data: { ...data, expectedPortNumber: target.printPortNumber },
+              };
+            if (
+              result.status === 'OK' &&
+              ((expectedHost && !queue.hostAddress) ||
+                (target.printPortNumber && !queue.portNumber) ||
+                (target.printProtocol && !queue.protocol))
+            )
+              return {
+                status: 'UNKNOWN',
+                summary: 'Fila observada, mas faltam dados da porta para validar o destino.',
                 data: {
-                  queueName: queue.name,
-                  driver: queue.driverName,
-                  queueStatus: queue.status ?? null,
+                  ...data,
+                  expectedHost: expectedHost ?? null,
+                  expectedProtocol: target.printProtocol,
+                  expectedPortNumber: target.printPortNumber,
                 },
               };
             return {
               ...result,
-              data: {
-                queueName: queue.name,
-                driver: queue.driverName,
-                queueStatus: queue.status ?? null,
-              },
+              data,
             };
           }
           const probe = await deps.tcp.probe(
@@ -226,6 +299,28 @@ export function createMonitoringService(input: Partial<Dependencies> = {}) {
     }
   };
   return {
+    async ping(id: string) {
+      const target = await get(id);
+      const host = validateMonitorHost(target.ipAddress || target.hostname || '');
+      const result = await deps.ping.probe(host, target.monitoring?.timeoutSeconds ?? 5);
+      const summary = result.reachable
+        ? 'O equipamento respondeu ao ping.'
+        : 'Sem resposta ao ping; isso não confirma que o equipamento esteja desligado.';
+      const status = result.reachable ? 'OK' : 'WARNING';
+      await deps.repository.observe(id, 'PING', status, summary, {
+        host,
+        reachable: result.reachable,
+        latencyMs: result.latencyMs,
+        reason: result.reason,
+      });
+      return {
+        host,
+        ...result,
+        status,
+        summary,
+        checkedAt: new Date().toISOString(),
+      };
+    },
     async detail(id: string): Promise<MonitorDetail> {
       const target = await get(id);
       const config = configuration(target);

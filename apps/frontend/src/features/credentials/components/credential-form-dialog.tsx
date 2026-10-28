@@ -130,7 +130,13 @@ export function CredentialFormDialog({
               onChange={(event) => setTargetServer(event.target.value)}
               placeholder="Ex.: SRV-SKY-PRT-01"
             />
+            <small>O formato UNC (\\servidor) é aceito e normalizado para o nome do host.</small>
             <small>Deixe vazio para permitir o uso em qualquer servidor de impressão.</small>
+            <small>
+              Esta credencial serve para consultar filas no painel Suporte de uma impressora. Ela
+              não é vinculada ao workflow nem concede administração remota aos computadores; essas
+              ações dependem das permissões do provedor de suporte.
+            </small>
           </label>
           {!current || replaceAccount ? (
             <>
@@ -182,8 +188,10 @@ export function CredentialFormDialog({
             </label>
           )}
           <p className={styles.securityNote}>
-            A senha fica criptografada no banco local. Ela nunca é devolvida pela API nem aparece na
-            lista. A chave de criptografia deve permanecer no backend.
+            Esta conta serve somente para consultar filas, drivers e portas do servidor de
+            impressão. Ela não habilita ações administrativas nos computadores nem preenche prompts
+            do Windows ou do ISL. A senha fica criptografada no banco local, não é devolvida pela
+            API e a chave de criptografia deve permanecer no backend.
           </p>
           {error && (
             <p className={styles.error} role="alert">

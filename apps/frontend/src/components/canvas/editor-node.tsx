@@ -19,6 +19,7 @@ export function EditorNode({
   onDraggingStateChange,
   onMove,
   onDragging,
+  onOpen,
   position,
   onEdit,
   floorLabel,
@@ -38,6 +39,7 @@ export function EditorNode({
   onUpdate: (change: Partial<MapElement>) => void;
   onMove: (x: number, y: number) => void;
   onDragging: (x: number, y: number) => { x: number; y: number };
+  onOpen: () => void;
   position: { x: number; y: number };
   onEdit: () => void;
   floorLabel: string | null;
@@ -62,6 +64,16 @@ export function EditorNode({
       scaleX={area ? 1 : 1 / zoom}
       scaleY={area ? 1 : 1 / zoom}
       draggable={!el.locked && !connecting && !spacePanActive}
+      onDblClick={(event) => {
+        if (el.kind !== 'DEVICE') return;
+        event.cancelBubble = true;
+        onOpen();
+      }}
+      onDblTap={(event) => {
+        if (el.kind !== 'DEVICE') return;
+        event.cancelBubble = true;
+        onOpen();
+      }}
       onDragMove={(event) => {
         if (event.target !== event.currentTarget) return;
         const target = event.target;
@@ -195,7 +207,7 @@ export function EditorNode({
             x={(w - glyphSize) / 2}
             y={(h - glyphSize) / 2}
             size={glyphSize}
-            color={el.device?.status === 'OFFLINE' ? '#c24b46' : '#303038'}
+            color="#303038"
           />
           <Circle
             x={w - 5}
@@ -250,7 +262,7 @@ export function EditorNode({
                 fontSize={11}
                 lineHeight={1.5}
                 fill="#737478"
-                text={`Tipo: ${el.device.kind} | Manual: ${el.device.status}\nIP: ${el.device.ipAddress ?? 'Não informado'}\nModelo: ${el.device.model ?? 'Não informado'}\nMonitor: ${healthLabel[health?.state ?? 'DISABLED']}\n${health?.summary ?? 'Habilite na aba Monitorar.'}`}
+                text={`Tipo: ${el.device.kind}\nIP: ${el.device.ipAddress ?? 'Não informado'}\nModelo: ${el.device.model ?? 'Não informado'}\nEstado observado: ${healthLabel[health?.state ?? 'DISABLED']}\n${health?.summary ?? 'Habilite o monitoramento para iniciar as leituras.'}`}
               />
             </Group>
           )}

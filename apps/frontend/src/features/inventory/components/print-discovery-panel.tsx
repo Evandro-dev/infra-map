@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import {
+  samePrintServer,
   printServerSchema,
   type ManagedCredentialSummary,
   type PrintDiscoveryResult,
@@ -39,9 +40,7 @@ export function PrintDiscoveryPanel({
     () =>
       savedCredentials.filter(
         (credential) =>
-          !credential.targetServer ||
-          credential.targetServer.toLocaleLowerCase('en-US') ===
-            server.trim().toLocaleLowerCase('en-US'),
+          !credential.targetServer || samePrintServer(credential.targetServer, server),
       ),
     [savedCredentials, server],
   );
@@ -263,7 +262,7 @@ export function PrintDiscoveryPanel({
         </p>
       )}
       {catalog?.snapshots
-        .filter((snapshot) => snapshot.server.toLowerCase() === server.trim().toLowerCase())
+        .filter((snapshot) => samePrintServer(snapshot.server, server))
         .map((snapshot) => (
           <div className="support-note" key={`${snapshot.source}:${snapshot.server}`}>
             <strong>{catalogSourceLabels[snapshot.source]}</strong> · {snapshot.queueCount} filas

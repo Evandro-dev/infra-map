@@ -48,6 +48,7 @@ export { printerImportSchema } from './printer-import.ts';
 export type { PrinterImportResult } from './printer-import.ts';
 export {
   printServerSchema,
+  samePrintServer,
   printSnapshotSchema,
   inventoryCatalogFields,
 } from './inventory-catalog.ts';
@@ -107,7 +108,7 @@ export const updateDeviceSchema = z
     operatingSystem: z.string().max(160).nullable().optional(),
     assignedUser: z.string().max(160).nullable().optional(),
     notes: z.string().max(4000).nullable().optional(),
-    status: z.enum(['UNKNOWN', 'ONLINE', 'OFFLINE', 'DEGRADED', 'MAINTENANCE']).optional(),
+    credentialId: z.string().trim().min(1).max(100).nullable().optional(),
   })
   .strict();
 export const mapElementSchema = z.object({

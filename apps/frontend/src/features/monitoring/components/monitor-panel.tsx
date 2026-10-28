@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Activity, RefreshCw, Save } from 'lucide-react';
 import type { MonitorConfig, MonitorDetail, MonitorObservation } from '@infra/contracts';
+import { api } from '@/lib/api';
 import type { Device } from '@/lib/types';
 import { monitoringRequest } from '../api';
 import { healthColor, healthLabel } from '../status';
@@ -12,6 +13,7 @@ const sourceNames = {
   WINDOWS: 'Saúde do Windows',
   PRINT_SERVER: 'Servidor de impressão',
   TCP: 'Porta TCP',
+  PING: 'Ping',
   ISL_DIAGNOSTIC: 'Diagnóstico pelo ISL',
 };
 const time = (value: string | null) =>
@@ -86,15 +88,18 @@ export function MonitorPanel({
   device,
   accessKey,
   onKeyChange,
+  onDeviceSaved,
   onChanged,
 }: {
   device: Device;
   accessKey: string;
   onKeyChange: (value: string) => void;
+  onDeviceSaved: (value: Device) => void;
   onChanged: () => void;
 }) {
   const [detail, setDetail] = useState<MonitorDetail | null>(null);
   const [config, setConfig] = useState<MonitorConfig | null>(null);
+  const [targetIp, setTargetIp] = useState(device.ipAddress ?? '');
   const [keyDraft, setKeyDraft] = useState(accessKey);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -135,6 +140,17 @@ export function MonitorPanel({
     setError('');
     setMessage('');
     try {
+      if (mode === 'save' && config) {
+        if (config.useTcp && !targetIp.trim())
+          throw new Error('Informe o endereço IP do equipamento para a verificação TCP.');
+        if (targetIp.trim() !== (device.ipAddress ?? '')) {
+          const updatedDevice = await api<Device>(endpoint, {
+            method: 'PATCH',
+            body: JSON.stringify({ ipAddress: targetIp.trim() || null }),
+          });
+          onDeviceSaved(updatedDevice);
+        }
+      }
       const value = await monitoringRequest<MonitorDetail>(
         endpoint + (mode === 'run' ? '/run' : ''),
         accessKey,
@@ -255,21 +271,47 @@ export function MonitorPanel({
                   />{' '}
                   Verificar uma porta TCP conhecida
                 </label>
+                <label className="form-row">
+                  <span>Endereço IP do equipamento</span>
+                  <input
+                    className="field"
+                    type="text"
+                    aria-label="Endereço IP do equipamento"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    maxLength={45}
+                    value={targetIp}
+                    onChange={(event) => setTargetIp(event.target.value)}
+                    placeholder="192.168.27.201"
+                  />
+                  <small className="support-help">
+                    Digite o IP completo. Ele será salvo no cadastro do equipamento ao salvar o
+                    monitoramento.
+                  </small>
+                </label>
                 {config.useTcp && (
-                  <label className="form-row">
-                    <span>Porta TCP</span>
-                    <input
-                      className="field"
-                      type="number"
-                      min={1}
-                      max={65535}
-                      required
-                      value={config.tcpPort ?? ''}
-                      onChange={(event) =>
-                        update({ tcpPort: event.target.value ? Number(event.target.value) : null })
-                      }
-                    />
-                  </label>
+                  <>
+                    <label className="form-row">
+                      <span>Porta TCP (número)</span>
+                      <input
+                        className="field"
+                        type="number"
+                        aria-label="Porta TCP"
+                        min={1}
+                        max={65535}
+                        required
+                        value={config.tcpPort ?? ''}
+                        onChange={(event) =>
+                          update({
+                            tcpPort: event.target.value ? Number(event.target.value) : null,
+                          })
+                        }
+                      />
+                      <small className="support-help">
+                        Informe somente o número da porta TCP conhecida, não o endereço IP.
+                      </small>
+                    </label>
+                  </>
                 )}
                 <label className="form-row">
                   <span>Intervalo (segundos)</span>

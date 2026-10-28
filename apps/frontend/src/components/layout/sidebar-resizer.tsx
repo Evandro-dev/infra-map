@@ -4,17 +4,27 @@ import { IconTip } from '@/components/ui-tooltip';
 export function SidebarResizer({
   sidebarWidth,
   resizeSidebar,
+  storageKey = 'infra-map-sidebar-width',
+  direction = 'forward',
+  defaultWidth = 224,
 }: {
   sidebarWidth: number;
   resizeSidebar: (value: number) => void;
+  storageKey?: string;
+  direction?: 'forward' | 'reverse';
+  defaultWidth?: number;
 }) {
   const sidebarDrag = useRef<{ initialX: number; initialWidth: number } | null>(null);
+  const directionFactor = direction === 'reverse' ? -1 : 1;
   function finishSidebarResize(event: React.PointerEvent<HTMLDivElement>) {
     const drag = sidebarDrag.current;
     if (!drag) return;
     const result = Math.max(
       180,
-      Math.min(440, Math.round(drag.initialWidth + event.clientX - drag.initialX)),
+      Math.min(
+        440,
+        Math.round(drag.initialWidth + directionFactor * (event.clientX - drag.initialX)),
+      ),
     );
     sidebarDrag.current = null;
     resizeSidebar(result);
@@ -24,7 +34,7 @@ export function SidebarResizer({
       /* Already released */
     }
     try {
-      window.localStorage.setItem('infra-map-sidebar-width', String(result));
+      window.localStorage.setItem(storageKey, String(result));
     } catch {
       /* Optional */
     }
@@ -48,14 +58,15 @@ export function SidebarResizer({
         }}
         onPointerMove={(event) => {
           const drag = sidebarDrag.current;
-          if (drag) resizeSidebar(drag.initialWidth + event.clientX - drag.initialX);
+          if (drag)
+            resizeSidebar(drag.initialWidth + directionFactor * (event.clientX - drag.initialX));
         }}
         onPointerUp={finishSidebarResize}
         onPointerCancel={finishSidebarResize}
         onDoubleClick={() => {
-          resizeSidebar(224);
+          resizeSidebar(defaultWidth);
           try {
-            window.localStorage.setItem('infra-map-sidebar-width', '224');
+            window.localStorage.setItem(storageKey, String(defaultWidth));
           } catch {
             /* optional */
           }
@@ -65,14 +76,17 @@ export function SidebarResizer({
             event.preventDefault();
             const next =
               event.key === 'Home'
-                ? 224
+                ? defaultWidth
                 : Math.max(
                     180,
-                    Math.min(440, sidebarWidth + (event.key === 'ArrowRight' ? 12 : -12)),
+                    Math.min(
+                      440,
+                      sidebarWidth + directionFactor * (event.key === 'ArrowRight' ? 12 : -12),
+                    ),
                   );
             resizeSidebar(next);
             try {
-              window.localStorage.setItem('infra-map-sidebar-width', String(next));
+              window.localStorage.setItem(storageKey, String(next));
             } catch {
               /* optional */
             }

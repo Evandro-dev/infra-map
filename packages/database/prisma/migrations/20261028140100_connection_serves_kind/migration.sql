@@ -1,0 +1,1 @@
+ALTER TYPE "ConnectionKind" ADD VALUE 'SERVES';

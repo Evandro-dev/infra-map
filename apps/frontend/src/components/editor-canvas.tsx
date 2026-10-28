@@ -92,6 +92,7 @@ interface CanvasProps {
   onAddArea: () => void;
   onAddDevice: (kind: DeviceKind) => void;
   onPlaceDevice: (device: Device) => void;
+  onOpenDevice: (elementId: string) => void;
   onActionError: (message: string) => void;
 }
 export function EditorCanvas({
@@ -121,6 +122,7 @@ export function EditorCanvas({
   onAddArea,
   onAddDevice,
   onPlaceDevice,
+  onOpenDevice,
   onActionError,
 }: CanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -382,11 +384,14 @@ export function EditorCanvas({
     () => new Map(elements.map((element) => [element.id, element])),
     [elements],
   );
-  const beginEdit = useCallback((id: string, value: string) => {
-    const edit = { id, value };
-    editingRef.current = edit;
-    setEditing(edit);
-  }, []);
+  const beginEdit = useCallback(
+    (id: string, value: string) => {
+      const edit = { id, value };
+      editingRef.current = edit;
+      setEditing(edit);
+    },
+    [setEditing],
+  );
   useEffect(() => {
     const onSpaceKeyUp = (event: KeyboardEvent) => {
       if (event.code !== 'Space' || !spaceTapRef.current) return;
@@ -597,6 +602,7 @@ export function EditorCanvas({
             onHover={(enter) => (enter ? markHover(el.id) : releaseHover())}
             onUpdate={(change) => update(el.id, change)}
             onMove={(x, y) => moveElement(el, x, y)}
+            onOpen={() => onOpenDevice(el.id)}
             onDragging={(x, y) => {
               const snapped = snapPosition(el, x, y);
               setDragPreview((previous) =>
@@ -877,21 +883,37 @@ export function EditorCanvas({
           : null;
     const health = computer?.deviceId ? monitoring[computer.deviceId] : undefined;
     const relation = health?.relations.find((row) => row.printerId === printer?.deviceId);
+    const printerHealth = printer?.deviceId ? monitoring[printer.deviceId] : undefined;
+    const printServerObservation = printerHealth?.observations.find(
+      (row) => row.source === 'PRINT_SERVER',
+    );
     const color =
-      computer && printer
-        ? health?.state === 'STALE' || health?.state === 'DISABLED'
+      link.kind === 'SERVES'
+        ? printerHealth?.state === 'STALE' || printerHealth?.state === 'DISABLED'
           ? healthColor.UNKNOWN
-          : relation
-            ? healthColor[relation.status]
-            : '#537ba4'
-        : '#666a73';
+          : printServerObservation
+            ? healthColor[printServerObservation.status]
+            : healthColor.UNKNOWN
+        : computer && printer
+          ? health?.state === 'STALE' || health?.state === 'DISABLED'
+            ? healthColor.UNKNOWN
+            : relation
+              ? healthColor[relation.status]
+              : healthColor.UNKNOWN
+          : '#666a73';
     const endpoints = facingEndpoints(from, to);
     return [
       {
         id: link.id,
-        label: `Conexão entre ${source.name} e ${target.name}`,
+        label:
+          link.kind === 'SERVES'
+            ? `Servidor ${source.device?.kind === 'SERVER' ? source.name : target.name} hospeda a fila ${printer?.name ?? 'da impressora'}`
+            : link.kind === 'PRINTING'
+              ? `${computer?.name ?? 'Computador'} possui a fila ${printer?.name ?? 'instalada'}`
+              : `Conexão entre ${source.name} e ${target.name}`,
         curve: connectionCurve(endpoints.from, endpoints.to),
         color,
+        dashed: link.kind === 'SERVES',
       },
     ];
   });

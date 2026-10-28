@@ -19,7 +19,8 @@ export const credentialProviders: readonly CredentialProviderDefinition[] = [
     id: 'WINDOWS_PRINT_SERVER',
     name: 'Windows Print Server',
     category: 'Servidores',
-    description: 'Conta usada somente para consultar filas, drivers e portas do servidor.',
+    description:
+      'Conta usada somente para consultar filas, drivers e portas do servidor de impressão. Não habilita ações administrativas nos computadores.',
     icon: Server,
     fields: [
       { name: 'targetServer', label: 'Servidor permitido (opcional)', type: 'text' },
