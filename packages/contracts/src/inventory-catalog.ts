@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { windowsNetworkAdapterSchema } from './monitoring.ts';
 
 export const printServerSchema = z
   .string()
@@ -33,6 +34,20 @@ export const printSnapshotSchema = z
     source: z.enum(['WINDOWS', 'REFERENCE']),
     collectedAt: z.iso.datetime(),
     referenceDate: z.iso.date().nullable().default(null),
+    serverIdentity: z
+      .object({
+        hostname: optionalText,
+        manufacturer: optionalText,
+        model: optionalText,
+        serialNumber: optionalText,
+        operatingSystem: optionalText,
+        ipAddress: z.union([z.ipv4(), z.ipv6()]).nullable(),
+        macAddress: z.string().max(40).nullable(),
+        networkAdapters: z.array(windowsNetworkAdapterSchema).max(32),
+      })
+      .strict()
+      .nullable()
+      .optional(),
     queues: z
       .array(
         z
@@ -78,6 +93,7 @@ export const printSnapshotSchema = z
   })
   .strict();
 export type PrintSnapshot = z.infer<typeof printSnapshotSchema>;
+export type PrintServerIdentity = NonNullable<PrintSnapshot['serverIdentity']>;
 
 export const inventoryCatalogFields = [
   'manufacturer',

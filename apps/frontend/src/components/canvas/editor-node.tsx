@@ -3,12 +3,13 @@ import { useState } from 'react';
 import { Group, Rect, Text, Circle } from 'react-konva';
 import { VectorIcon } from '@/components/vector-icons';
 import { DEFAULT_ICONS, type DeviceKind, type MapElement } from '@/lib/types';
-import type { DeviceHealth } from '@infra/contracts';
+import type { DeviceHealth, PrinterRelationHealth } from '@infra/contracts';
 import { healthColor, healthLabel } from '@/features/monitoring/status';
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 export function EditorNode({
   el,
   health,
+  relationEvidence,
   connecting,
   spacePanActive,
   selected,
@@ -28,6 +29,11 @@ export function EditorNode({
 }: {
   el: MapElement;
   health?: DeviceHealth;
+  relationEvidence?: {
+    computerName: string;
+    checkedAt: string | null;
+    relation: PrinterRelationHealth;
+  };
   connecting: boolean;
   spacePanActive: boolean;
   selected: boolean;
@@ -55,6 +61,20 @@ export function EditorNode({
   const icon =
     el.iconKey ?? (area ? 'door-open' : DEFAULT_ICONS[(el.device?.kind ?? 'OTHER') as DeviceKind]);
   const glyphSize = clamp(Math.min(w, h) * 0.54, 23, 38);
+  const deviceState = health?.state ?? 'DISABLED';
+  const relationOnlyEvidence =
+    relationEvidence && ['DISABLED', 'UNKNOWN', 'UNAVAILABLE'].includes(deviceState);
+  const dotColor = relationOnlyEvidence
+    ? relationEvidence.relation.status === 'OK'
+      ? '#3478bd'
+      : healthColor[relationEvidence.relation.status]
+    : healthColor[deviceState];
+  const stateDescription = health
+    ? `${healthLabel[health.state]}${health.state === 'DISABLED' ? ' — sem leitura direta' : ''}`
+    : 'Sem leitura direta';
+  const relationDescription = relationEvidence
+    ? `Fila observada em ${relationEvidence.computerName}: ${healthLabel[relationEvidence.relation.status]}. ${relationEvidence.relation.summary}${relationEvidence.checkedAt ? ` Leitura: ${new Date(relationEvidence.checkedAt).toLocaleString('pt-BR')}.` : ''}`
+    : 'Nenhuma relação de fila observada recentemente.';
   return (
     <Group
       id={el.id}
@@ -215,7 +235,7 @@ export function EditorNode({
             radius={4.5}
             stroke="#fff"
             strokeWidth={1.5}
-            fill={healthColor[health?.state ?? 'DISABLED']}
+            fill={dotColor}
             listening={false}
           />
           <Text
@@ -239,7 +259,7 @@ export function EditorNode({
             <Group x={w + 9} y={-4} listening={false}>
               <Rect
                 width={225}
-                height={155}
+                height={196}
                 cornerRadius={10}
                 fill="#fff"
                 stroke="#e0e0e0"
@@ -262,7 +282,7 @@ export function EditorNode({
                 fontSize={11}
                 lineHeight={1.5}
                 fill="#737478"
-                text={`Tipo: ${el.device.kind}\nIP: ${el.device.ipAddress ?? 'Não informado'}\nModelo: ${el.device.model ?? 'Não informado'}\nEstado observado: ${healthLabel[health?.state ?? 'DISABLED']}\n${health?.summary ?? 'Habilite o monitoramento para iniciar as leituras.'}`}
+                text={`Tipo: ${el.device.kind}\nIP: ${el.device.ipAddress ?? 'Não informado'}\nModelo: ${el.device.model ?? 'Não informado'}\nLeitura direta: ${stateDescription}\n${health?.summary ?? 'Ainda não há leitura direta.'}\n${relationDescription}`}
               />
             </Group>
           )}

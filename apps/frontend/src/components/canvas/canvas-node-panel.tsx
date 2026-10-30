@@ -5,6 +5,7 @@ import { FolderPlus, MapPinned, Search, X } from 'lucide-react';
 import type { Device, DeviceKind } from '@/lib/types';
 import { DevicePalette } from '@/components/layout/device-palette';
 import { InventoryPicker } from '@/features/inventory/components/inventory-picker';
+import { MapTopologyDiscovery } from '@/features/inventory/components/map-topology-discovery';
 
 interface Props {
   disabled: boolean;
@@ -16,6 +17,11 @@ interface Props {
   onCreateTerritory: () => void;
   onAddDevice: (kind: DeviceKind) => void;
   onPlaceDevice: (device: Device) => void;
+  mapId: string;
+  supportAccessKey: string;
+  canDiscover: boolean;
+  placedDeviceIds: string[];
+  onDiscoveryCompleted: () => void;
   onClose: () => void;
 }
 
@@ -29,6 +35,11 @@ export function CanvasNodePanel({
   onCreateTerritory,
   onAddDevice,
   onPlaceDevice,
+  mapId,
+  supportAccessKey,
+  canDiscover,
+  placedDeviceIds,
+  onDiscoveryCompleted,
   onClose,
 }: Props) {
   const normalizedSearch = search.trim().toLocaleLowerCase('pt-BR');
@@ -106,6 +117,10 @@ export function CanvasNodePanel({
 
             <div className="canvas-node-group">
               <span className="canvas-node-group-title">Dispositivos novos</span>
+              <p className="support-help">
+                Este workflow é um mapa topológico: nós podem ser criados em qualquer ordem. As
+                linhas mostram relações entre equipamentos, não etapas de execução.
+              </p>
               <DevicePalette
                 disabled={disabled}
                 searchTerm={search}
@@ -116,10 +131,26 @@ export function CanvasNodePanel({
               />
             </div>
 
+            <div className="canvas-node-group">
+              <span className="canvas-node-group-title">Mapear infraestrutura</span>
+              <p className="support-help">
+                Cinza = sem leitura direta; azul = fila observada no computador; verde na linha =
+                configuração conferida. Nenhuma dessas leituras testa a impressão física.
+              </p>
+              <MapTopologyDiscovery
+                mapId={mapId}
+                accessKey={supportAccessKey}
+                canDiscover={canDiscover}
+                disabled={disabled}
+                onCompleted={onDiscoveryCompleted}
+              />
+            </div>
+
             <details className="canvas-node-inventory">
-              <summary>Equipamentos cadastrados</summary>
+              <summary>Posicionar equipamento salvo</summary>
               <InventoryPicker
                 disabled={disabled}
+                placedDeviceIds={placedDeviceIds}
                 onPlace={(device) => {
                   onPlaceDevice(device);
                   onClose();

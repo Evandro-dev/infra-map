@@ -1,5 +1,10 @@
 import { z } from 'zod';
-export { monitorConfigSchema, windowsComputerReportSchema } from './monitoring.ts';
+export {
+  monitorConfigSchema,
+  windowsComputerReportSchema,
+  windowsComputerIdentitySchema,
+  windowsNetworkAdapterSchema,
+} from './monitoring.ts';
 export type {
   MonitorConfig,
   MonitorSource,
@@ -10,6 +15,8 @@ export type {
   MonitorDetail,
   PrinterRelationHealth,
   WindowsComputerReport,
+  WindowsComputerIdentity,
+  WindowsNetworkAdapter,
 } from './monitoring.ts';
 export { catalogSearchSchema, printDiscoveryRequestSchema } from './catalog-search.ts';
 export type {
@@ -20,6 +27,8 @@ export type {
   WindowsCredentials,
   PrintDiscoveryResult,
 } from './catalog-search.ts';
+export { mapTopologyDiscoveryRequestSchema } from './topology-discovery.ts';
+export type { MapTopologyDiscoveryResult } from './topology-discovery.ts';
 export {
   managedCredentialProviderSchema,
   createWindowsPrintCredentialSchema,
@@ -54,6 +63,7 @@ export {
 } from './inventory-catalog.ts';
 export type {
   PrintSnapshot,
+  PrintServerIdentity,
   CatalogOption,
   CatalogQueue,
   CatalogPort,

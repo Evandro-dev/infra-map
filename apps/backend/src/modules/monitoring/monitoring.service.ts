@@ -24,6 +24,7 @@ import { credentialsService } from '../credentials/credentials.service.js';
 import { tcpClient } from './adapters/tcp.client.js';
 import { pingClient } from './adapters/ping.client.js';
 import { AppError } from '../../shared/errors.js';
+import { deviceIdentityRepository } from '../devices/device-identity.repository.js';
 
 interface Dependencies {
   repository: typeof monitoringRepository;
@@ -34,6 +35,7 @@ interface Dependencies {
   ping: typeof pingClient;
   saveSnapshot: typeof printCatalogRepository.save;
   credentials: typeof credentialsService;
+  identity: typeof deviceIdentityRepository;
 }
 export function createMonitoringService(input: Partial<Dependencies> = {}) {
   const deps: Dependencies = {
@@ -45,6 +47,7 @@ export function createMonitoringService(input: Partial<Dependencies> = {}) {
     ping: pingClient,
     saveSnapshot: (snapshot) => printCatalogRepository.save(snapshot),
     credentials: credentialsService,
+    identity: deviceIdentityRepository,
     ...input,
   };
   const get = async (id: string) => {
@@ -141,6 +144,15 @@ export function createMonitoringService(input: Partial<Dependencies> = {}) {
               target.ipAddress || target.hostname || '',
               config.timeoutSeconds,
             );
+            let identityFieldsFilled: string[] = [];
+            try {
+              identityFieldsFilled = await deps.identity.fillMissing(
+                target.id,
+                deps.identity.fromComputerReport(report),
+              );
+            } catch {
+              // Identity enrichment is best-effort; it must not hide a successful health reading.
+            }
             const relations = compareExpectedPrinters(
               target.assignedPrinters.map((row) => row.printer),
               report.printers,
@@ -156,6 +168,9 @@ export function createMonitoringService(input: Partial<Dependencies> = {}) {
                 disks: report.disks,
                 warnings: report.warnings,
                 printersAvailable: report.printersAvailable,
+                identity: report.identity ?? null,
+                networkAdapters: report.networkAdapters ?? [],
+                identityFieldsFilled,
                 printers: report.printers.map((printer) => ({
                   name: printer.Name,
                   driver: printer.DriverName,

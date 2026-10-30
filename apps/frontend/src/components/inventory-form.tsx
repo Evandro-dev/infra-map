@@ -24,7 +24,7 @@ const typedFields: Partial<Record<DeviceKind, [keyof Device, string][]>> = {
     ['operatingSystem', 'Sistema operacional'],
   ],
   SERVER: [
-    ['hostname', 'Hostname'],
+    ['hostname', 'Hostname / DNS'],
     ['operatingSystem', 'Sistema operacional'],
   ],
   PRINTER: [
@@ -106,6 +106,12 @@ export function InventoryForm({
         <span>Cadastro técnico</span>
       </div>
       <div className="field-stack">
+        {device.kind === 'SERVER' && (
+          <p className="support-help">
+            Servidor é um tipo genérico e pode representar qualquer função. O mapa identifica
+            relação de impressão quando este hostname coincide com o servidor cadastrado na fila.
+          </p>
+        )}
         {fields
           .filter(
             ([key]) =>

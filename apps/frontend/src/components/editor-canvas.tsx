@@ -92,6 +92,10 @@ interface CanvasProps {
   onAddArea: () => void;
   onAddDevice: (kind: DeviceKind) => void;
   onPlaceDevice: (device: Device) => void;
+  supportAccessKey: string;
+  canDiscover: boolean;
+  placedDeviceIds: string[];
+  onDiscoveryCompleted: () => void;
   onOpenDevice: (elementId: string) => void;
   onActionError: (message: string) => void;
 }
@@ -122,6 +126,10 @@ export function EditorCanvas({
   onAddArea,
   onAddDevice,
   onPlaceDevice,
+  supportAccessKey,
+  canDiscover,
+  placedDeviceIds,
+  onDiscoveryCompleted,
   onOpenDevice,
   onActionError,
 }: CanvasProps) {
@@ -552,11 +560,28 @@ export function EditorCanvas({
       .map((el) => {
         const floors = floorsFor(elements, el);
         const floorIndex = floors.findIndex((f) => f.id === el.id);
+        const relationEvidence = el.deviceId
+          ? Object.entries(monitoring)
+              .flatMap(([computerId, health]) =>
+                health.relations
+                  .filter((relation) => relation.printerId === el.deviceId)
+                  .map((relation) => ({
+                    computerName:
+                      elements.find((candidate) => candidate.deviceId === computerId)?.name ??
+                      computerId,
+                    checkedAt: health.checkedAt,
+                    relation,
+                  })),
+              )
+              .sort((left, right) => (left.checkedAt ?? '').localeCompare(right.checkedAt ?? ''))
+              .at(-1)
+          : undefined;
         return (
           <EditorNode
             key={el.id}
             el={el}
             health={el.deviceId ? monitoring[el.deviceId] : undefined}
+            relationEvidence={relationEvidence}
             connecting={pendingConnection !== null}
             spacePanActive={spacePanActive}
             unit={unit}
@@ -1636,6 +1661,11 @@ export function EditorCanvas({
           onCreateTerritory={onCreateTerritory}
           onAddDevice={onAddDevice}
           onPlaceDevice={onPlaceDevice}
+          mapId={map.id}
+          supportAccessKey={supportAccessKey}
+          canDiscover={canDiscover}
+          placedDeviceIds={placedDeviceIds}
+          onDiscoveryCompleted={onDiscoveryCompleted}
           onClose={() => setNodePanelOpen(false)}
         />
       )}

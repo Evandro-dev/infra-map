@@ -72,9 +72,31 @@ export interface MonitorDetail {
   lastRunAt: string | null;
   nextRunAt: string | null;
 }
+export const windowsNetworkAdapterSchema = z
+  .object({
+    name: z.string().nullable(),
+    macAddress: z.string().nullable(),
+    ipv4Addresses: z.array(z.string()).max(32),
+    subnetMasks: z.array(z.string()).max(32),
+    defaultGateways: z.array(z.string()).max(16),
+    dnsServers: z.array(z.string()).max(32),
+  })
+  .strict();
+export const windowsComputerIdentitySchema = z
+  .object({
+    hostname: z.string().nullable(),
+    manufacturer: z.string().nullable(),
+    model: z.string().nullable(),
+    serialNumber: z.string().nullable(),
+  })
+  .strict();
+export type WindowsComputerIdentity = z.infer<typeof windowsComputerIdentitySchema>;
+export type WindowsNetworkAdapter = z.infer<typeof windowsNetworkAdapterSchema>;
 export const windowsComputerReportSchema = z
   .object({
     target: z.string().min(1),
+    identity: windowsComputerIdentitySchema.nullable().optional(),
+    networkAdapters: z.array(windowsNetworkAdapterSchema).max(32).optional(),
     spooler: z.string().nullable(),
     osCaption: z.string().nullable(),
     uptimeHours: z.number().nonnegative().nullable(),

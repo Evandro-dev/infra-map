@@ -30,6 +30,39 @@ try {
   # Consultas de leitura a um único destino escolhido pelo operador.
   $printers = @(Get-Printer @target -ErrorAction Stop)
   $warnings = @()
+  $serverIdentity = $null
+  try {
+    $computer = Get-CimInstance @target -ClassName Win32_ComputerSystem -OperationTimeoutSec 5 -ErrorAction Stop
+    $bios = Get-CimInstance @target -ClassName Win32_BIOS -OperationTimeoutSec 5 -ErrorAction Stop
+    $serverOs = Get-CimInstance @target -ClassName Win32_OperatingSystem -OperationTimeoutSec 5 -ErrorAction Stop
+    $networkAdapters = @(Get-CimInstance @target -ClassName Win32_NetworkAdapterConfiguration -Filter 'IPEnabled=True' -OperationTimeoutSec 5 -ErrorAction Stop | ForEach-Object {
+      [pscustomobject]@{
+        name = $_.Description
+        macAddress = $_.MACAddress
+        ipv4Addresses = @($_.IPAddress | Where-Object { $_ -match '^\d{1,3}(\.\d{1,3}){3}$' })
+        subnetMasks = @($_.IPSubnet | Where-Object { $_ -match '^\d{1,3}(\.\d{1,3}){3}$' })
+        defaultGateways = @($_.DefaultIPGateway | Where-Object { $_ -match '^\d{1,3}(\.\d{1,3}){3}$' })
+        dnsServers = @($_.DNSServerSearchOrder | Where-Object { $_ })
+      }
+    })
+    $primaryAdapters = @($networkAdapters | Where-Object { $_.defaultGateways.Count -gt 0 -and $_.ipv4Addresses.Count -gt 0 })
+    $primaryIp = $null
+    $primaryMac = $null
+    if ($primaryAdapters.Count -eq 1 -and $primaryAdapters[0].ipv4Addresses.Count -eq 1) {
+      $primaryIp = $primaryAdapters[0].ipv4Addresses[0]
+      $primaryMac = $primaryAdapters[0].macAddress
+    }
+    $serverIdentity = [pscustomobject]@{
+      hostname = $computer.DNSHostName
+      manufacturer = $computer.Manufacturer
+      model = $computer.Model
+      serialNumber = $bios.SerialNumber
+      operatingSystem = $serverOs.Caption
+      ipAddress = $primaryIp
+      macAddress = $primaryMac
+      networkAdapters = $networkAdapters
+    }
+  } catch { $warnings += 'Identidade do servidor ou configuração de rede indisponível; as filas continuam válidas.' }
   $ports = @()
   $drivers = @()
   try {
@@ -63,7 +96,7 @@ try {
   })
   [pscustomobject]@{
     server = $server; source = 'WINDOWS'; collectedAt = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ');
-    queues = $queues; drivers = $drivers; ports = $ports; warnings = $warnings
+    serverIdentity = $serverIdentity; queues = $queues; drivers = $drivers; ports = $ports; warnings = $warnings
   } | ConvertTo-Json -Depth 8 -Compress
 } catch {
   $errorCode = 'SERVER_QUERY_FAILED'

@@ -6,23 +6,26 @@ import { DEVICE_LABELS, type Device } from '@/lib/types';
 export function InventoryPicker({
   disabled,
   onPlace,
+  placedDeviceIds,
 }: {
   disabled: boolean;
   onPlace: (device: Device) => void;
+  placedDeviceIds: string[];
 }) {
   const [devices, setDevices] = useState<Device[]>([]);
   const [selected, setSelected] = useState('');
   const [working, setWorking] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
+  const availableDevices = devices.filter((device) => !placedDeviceIds.includes(device.id));
   async function refresh() {
     setWorking(true);
     setError('');
     try {
       setDevices(await api<Device[]>('/devices'));
       setLoaded(true);
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'Falha ao consultar inventário.');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Falha ao carregar equipamentos.');
     } finally {
       setWorking(false);
     }
@@ -30,10 +33,16 @@ export function InventoryPicker({
   return (
     <div className="field-stack">
       <button className="btn" disabled={disabled || working} onClick={() => void refresh()}>
-        {working ? 'Consultando...' : 'Consultar inventário cadastrado'}
+        {working ? 'Carregando...' : 'Carregar equipamentos salvos'}
       </button>
-      {loaded && !devices.length && <p className="support-help">Nenhum equipamento cadastrado.</p>}
-      {devices.length > 0 && (
+      {loaded && !availableDevices.length && (
+        <p className="support-help">
+          {devices.length
+            ? 'Todos os equipamentos salvos já estão neste workflow.'
+            : 'Nenhum equipamento cadastrado.'}
+        </p>
+      )}
+      {availableDevices.length > 0 && (
         <>
           <label className="form-row">
             <span className="muted">Equipamento existente</span>
@@ -44,7 +53,7 @@ export function InventoryPicker({
               onChange={(event) => setSelected(event.target.value)}
             >
               <option value="">Selecione</option>
-              {devices.map((device) => (
+              {availableDevices.map((device) => (
                 <option key={device.id} value={device.id}>
                   {device.name} · {DEVICE_LABELS[device.kind]}
                 </option>
@@ -53,9 +62,9 @@ export function InventoryPicker({
           </label>
           <button
             className="btn"
-            disabled={disabled || !devices.some((device) => device.id === selected)}
+            disabled={disabled || !availableDevices.some((device) => device.id === selected)}
             onClick={() => {
-              const device = devices.find((item) => item.id === selected);
+              const device = availableDevices.find((item) => item.id === selected);
               if (device) onPlace(device);
             }}
           >

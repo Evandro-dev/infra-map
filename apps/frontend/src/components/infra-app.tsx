@@ -620,6 +620,28 @@ export function InfraApp({
     void saveRef.current();
   }, [connectionDirty, deleting, dirty, isDraft, loading, map?.id, mapDirty, saving, workflowId]);
 
+  async function refreshAfterTopologyDiscovery() {
+    if (!mapId || isDraft) return;
+    try {
+      const [updatedMap, connectionResult, relationshipResult] = await Promise.all([
+        api<MapRecord>(`/maps/${encodeURIComponent(mapId)}`),
+        api<{ connections: MapConnection[] }>(`/maps/${encodeURIComponent(mapId)}/connections`),
+        api<{ relationships: { computerId: string; printerId: string }[] }>(
+          `/maps/${encodeURIComponent(mapId)}/relationships`,
+        ),
+      ]);
+      setMap(updatedMap);
+      load(updatedMap.elements);
+      setConnections(connectionResult.connections);
+      setRelationships(relationshipResult.relationships);
+      setMonitorRevision((value) => value + 1);
+      setLinkRevision((value) => value + 1);
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : 'Falha ao atualizar o mapa após a coleta.',
+      );
+    }
+  }
   const visibleDraft = isDraft && map?.id === workflowId;
   if (loading || (!map && !error) || (map?.id !== workflowId && !error))
     return <div className="loading">Carregando Infra Map...</div>;
@@ -704,6 +726,14 @@ export function InfraApp({
             }}
             onAddDevice={(kind) => void addDevice(kind)}
             onPlaceDevice={placeDevice}
+            supportAccessKey={supportAccessKey}
+            canDiscover={
+              !isDraft && !dirty && !mapDirty && !connectionDirty && !saving && !deleting
+            }
+            placedDeviceIds={elements.flatMap((element) =>
+              element.kind === 'DEVICE' && element.deviceId ? [element.deviceId] : [],
+            )}
+            onDiscoveryCompleted={() => void refreshAfterTopologyDiscovery()}
             onOpenDevice={(nodeId) => {
               if (isDraft) {
                 setError('Salve o workflow antes de abrir os parâmetros deste dispositivo.');

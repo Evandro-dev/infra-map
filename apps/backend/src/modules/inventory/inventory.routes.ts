@@ -3,11 +3,13 @@ import { z } from 'zod';
 import {
   deviceKindSchema,
   catalogSearchSchema,
+  mapTopologyDiscoveryRequestSchema,
   printDiscoveryRequestSchema,
 } from '@infra/contracts';
 import { printCatalogService } from './print-catalog.service.js';
 import { requireSupportOperator } from '../support/support.auth.js';
 import { credentialsService } from '../credentials/credentials.service.js';
+import { topologyDiscoveryService } from './topology-discovery.service.js';
 
 export async function inventoryRoutes(app: FastifyInstance) {
   app.get('/catalog', async (req) => {
@@ -43,6 +45,17 @@ export async function inventoryRoutes(app: FastifyInstance) {
         portCount: snapshot.ports.length,
         warnings: snapshot.warnings,
       };
+    },
+  );
+  app.post(
+    '/map-discovery',
+    {
+      preHandler: requireSupportOperator,
+      config: { rateLimit: { max: 2, timeWindow: '1 minute' } },
+    },
+    async (req) => {
+      const { mapId } = mapTopologyDiscoveryRequestSchema.parse(req.body);
+      return topologyDiscoveryService.discover(mapId);
     },
   );
 }
